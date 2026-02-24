@@ -1,0 +1,26 @@
+{
+    "app_name": "DaxterWare",
+    "version": "1.0.0",
+    "language": "fr",
+    "theme": "dark",
+    "download_folder": "downloads",
+    "installers_folder": "installers",
+    "logs_folder": "logs",
+    "max_concurrent_downloads": 3,
+    "verify_hash": true,
+    "auto_cleanup_downloads": true,
+    "show_notifications": true,
+    "log_level": "INFO",
+    "proxy": {
+        "enabled": false,
+        "host": "",
+        "port": 8080,
+        "username": "",
+        "password": ""
+    },
+    "installation": {
+        "create_desktop_shortcuts": true,
+        "create_start_menu_shortcuts": true,
+        "auto_restart_after_install": false
+    }
+}

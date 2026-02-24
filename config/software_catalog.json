@@ -1,0 +1,531 @@
+{
+    "catalog_version": "1.0",
+    "last_updated": "2026-01-15",
+    "categories": [
+        {
+            "name": "Navigateurs",
+            "icon": "🌐",
+            "software": [
+                {
+                    "id": "chrome",
+                    "name": "Google Chrome",
+                    "description": "Navigateur web rapide et sécurisé de Google",
+                    "version": "latest",
+                    "type": "online",
+                    "url": "https://dl.google.com/chrome/install/GoogleChromeStandaloneEnterprise64.msi",
+                    "installer_type": "msi",
+                    "silent_args": "/qn /norestart",
+                    "sha256": "",
+                    "size_mb": 95,
+                    "detect_registry": "HKLM\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\Google Chrome",
+                    "website": "https://www.google.com/chrome/"
+                },
+                {
+                    "id": "firefox",
+                    "name": "Mozilla Firefox",
+                    "description": "Navigateur web libre et open source",
+                    "version": "latest",
+                    "type": "online",
+                    "url": "https://download.mozilla.org/?product=firefox-latest-ssl&os=win64&lang=fr",
+                    "installer_type": "exe",
+                    "silent_args": "/S",
+                    "sha256": "",
+                    "size_mb": 55,
+                    "detect_registry": "HKLM\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\Mozilla Firefox",
+                    "website": "https://www.mozilla.org/firefox/"
+                },
+                {
+                    "id": "brave",
+                    "name": "Brave Browser",
+                    "description": "Navigateur axé sur la confidentialité",
+                    "version": "latest",
+                    "type": "online",
+                    "url": "https://laptop-updates.brave.com/latest/winx64",
+                    "installer_type": "exe",
+                    "silent_args": "/silent /install",
+                    "sha256": "",
+                    "size_mb": 100,
+                    "detect_registry": "HKLM\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\BraveSoftware Brave-Browser",
+                    "website": "https://brave.com/"
+                }
+            ]
+        },
+        {
+            "name": "Multimédia",
+            "icon": "🎬",
+            "software": [
+                {
+                    "id": "vlc",
+                    "name": "VLC Media Player",
+                    "description": "Lecteur multimédia libre et gratuit",
+                    "version": "3.0.20",
+                    "type": "online",
+                    "url": "https://get.videolan.org/vlc/3.0.20/win64/vlc-3.0.20-win64.exe",
+                    "installer_type": "exe_nsis",
+                    "silent_args": "/S",
+                    "sha256": "",
+                    "size_mb": 45,
+                    "detect_registry": "HKLM\\SOFTWARE\\VideoLAN\\VLC",
+                    "website": "https://www.videolan.org/vlc/"
+                },
+                {
+                    "id": "audacity",
+                    "name": "Audacity",
+                    "description": "Éditeur audio libre et open source",
+                    "version": "3.4.2",
+                    "type": "online",
+                    "url": "https://github.com/audacity/audacity/releases/download/Audacity-3.4.2/audacity-win-3.4.2-64bit.exe",
+                    "installer_type": "exe_inno",
+                    "silent_args": "/VERYSILENT /NORESTART",
+                    "sha256": "",
+                    "size_mb": 35,
+                    "detect_registry": "HKLM\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\Audacity_is1",
+                    "website": "https://www.audacityteam.org/"
+                },
+                {
+                    "id": "spotify",
+                    "name": "Spotify",
+                    "description": "Service de streaming musical",
+                    "version": "latest",
+                    "type": "online",
+                    "url": "https://download.scdn.co/SpotifySetup.exe",
+                    "installer_type": "exe",
+                    "silent_args": "/silent",
+                    "sha256": "",
+                    "size_mb": 1,
+                    "detect_registry": "HKCU\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\Spotify",
+                    "website": "https://www.spotify.com/"
+                }
+            ]
+        },
+        {
+            "name": "Bureautique",
+            "icon": "📄",
+            "software": [
+                {
+                    "id": "libreoffice",
+                    "name": "LibreOffice",
+                    "description": "Suite bureautique libre et complète",
+                    "version": "7.6.4",
+                    "type": "online",
+                    "url": "https://download.documentfoundation.org/libreoffice/stable/7.6.4/win/x86_64/LibreOffice_7.6.4_Win_x86-64.msi",
+                    "installer_type": "msi",
+                    "silent_args": "/qn /norestart",
+                    "sha256": "",
+                    "size_mb": 350,
+                    "detect_registry": "HKLM\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\{8B69E4A5-3F3C-4B0A-8C9E-5F7A5C8B4E3D}",
+                    "website": "https://www.libreoffice.org/"
+                },
+                {
+                    "id": "notepadpp",
+                    "name": "Notepad++",
+                    "description": "Éditeur de texte avancé pour Windows",
+                    "version": "8.6.2",
+                    "type": "online",
+                    "url": "https://github.com/notepad-plus-plus/notepad-plus-plus/releases/download/v8.6.2/npp.8.6.2.Installer.x64.exe",
+                    "installer_type": "exe_nsis",
+                    "silent_args": "/S",
+                    "sha256": "",
+                    "size_mb": 5,
+                    "detect_registry": "HKLM\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\Notepad++",
+                    "website": "https://notepad-plus-plus.org/"
+                },
+                {
+                    "id": "adobereader",
+                    "name": "Adobe Acrobat Reader",
+                    "description": "Lecteur PDF gratuit",
+                    "version": "latest",
+                    "type": "online",
+                    "url": "https://ardownload2.adobe.com/pub/adobe/reader/win/AcrobatDC/2300820555/AcroRdrDC2300820555_fr_FR.exe",
+                    "installer_type": "exe",
+                    "silent_args": "/sAll /rs /msi EULA_ACCEPT=YES",
+                    "sha256": "",
+                    "size_mb": 250,
+                    "detect_registry": "HKLM\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\{AC76BA86-7AD7-1036-7B44-AC0F074E4100}",
+                    "website": "https://get.adobe.com/fr/reader/"
+                },
+                {
+                    "id": "sumatrapdf",
+                    "name": "SumatraPDF",
+                    "description": "Lecteur PDF léger et rapide",
+                    "version": "3.5.2",
+                    "type": "online",
+                    "url": "https://www.sumatrapdfreader.org/dl/rel/3.5.2/SumatraPDF-3.5.2-64-install.exe",
+                    "installer_type": "exe",
+                    "silent_args": "-s",
+                    "sha256": "",
+                    "size_mb": 12,
+                    "detect_registry": "HKLM\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\SumatraPDF",
+                    "website": "https://www.sumatrapdfreader.org/"
+                }
+            ]
+        },
+        {
+            "name": "Communication",
+            "icon": "💬",
+            "software": [
+                {
+                    "id": "discord",
+                    "name": "Discord",
+                    "description": "Application de messagerie et VoIP",
+                    "version": "latest",
+                    "type": "online",
+                    "url": "https://discord.com/api/downloads/distributions/app/installers/latest?channel=stable&platform=win&arch=x64",
+                    "installer_type": "exe",
+                    "silent_args": "-s",
+                    "sha256": "",
+                    "size_mb": 80,
+                    "detect_registry": "HKCU\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\Discord",
+                    "website": "https://discord.com/"
+                },
+                {
+                    "id": "zoom",
+                    "name": "Zoom",
+                    "description": "Application de visioconférence",
+                    "version": "latest",
+                    "type": "online",
+                    "url": "https://zoom.us/client/latest/ZoomInstallerFull.msi",
+                    "installer_type": "msi",
+                    "silent_args": "/qn /norestart",
+                    "sha256": "",
+                    "size_mb": 80,
+                    "detect_registry": "HKLM\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\{ZOOM}",
+                    "website": "https://zoom.us/"
+                },
+                {
+                    "id": "slack",
+                    "name": "Slack",
+                    "description": "Plateforme de communication d'équipe",
+                    "version": "latest",
+                    "type": "online",
+                    "url": "https://slack.com/ssb/download-win64-msi",
+                    "installer_type": "msi",
+                    "silent_args": "/qn /norestart",
+                    "sha256": "",
+                    "size_mb": 100,
+                    "detect_registry": "HKLM\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\Slack",
+                    "website": "https://slack.com/"
+                },
+                {
+                    "id": "teams",
+                    "name": "Microsoft Teams",
+                    "description": "Plateforme de collaboration Microsoft",
+                    "version": "latest",
+                    "type": "online",
+                    "url": "https://go.microsoft.com/fwlink/?linkid=2196106",
+                    "installer_type": "msix",
+                    "silent_args": "",
+                    "sha256": "",
+                    "size_mb": 150,
+                    "detect_registry": "HKLM\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\MSTeams",
+                    "website": "https://www.microsoft.com/fr-fr/microsoft-teams/"
+                }
+            ]
+        },
+        {
+            "name": "Développement",
+            "icon": "💻",
+            "software": [
+                {
+                    "id": "vscode",
+                    "name": "Visual Studio Code",
+                    "description": "Éditeur de code source par Microsoft",
+                    "version": "latest",
+                    "type": "online",
+                    "url": "https://code.visualstudio.com/sha/download?build=stable&os=win32-x64",
+                    "installer_type": "exe_inno",
+                    "silent_args": "/VERYSILENT /NORESTART /MERGETASKS=!runcode",
+                    "sha256": "",
+                    "size_mb": 95,
+                    "detect_registry": "HKLM\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\{EA457B21-F73E-494C-ACAB-524FDE069978}_is1",
+                    "website": "https://code.visualstudio.com/"
+                },
+                {
+                    "id": "git",
+                    "name": "Git",
+                    "description": "Système de contrôle de version distribué",
+                    "version": "latest",
+                    "type": "online",
+                    "url": "https://github.com/git-for-windows/git/releases/download/v2.43.0.windows.1/Git-2.43.0-64-bit.exe",
+                    "installer_type": "exe_inno",
+                    "silent_args": "/VERYSILENT /NORESTART",
+                    "sha256": "",
+                    "size_mb": 60,
+                    "detect_registry": "HKLM\\SOFTWARE\\GitForWindows",
+                    "website": "https://git-scm.com/"
+                },
+                {
+                    "id": "python",
+                    "name": "Python 3",
+                    "description": "Langage de programmation Python",
+                    "version": "3.12.1",
+                    "type": "online",
+                    "url": "https://www.python.org/ftp/python/3.12.1/python-3.12.1-amd64.exe",
+                    "installer_type": "exe",
+                    "silent_args": "/quiet InstallAllUsers=1 PrependPath=1",
+                    "sha256": "",
+                    "size_mb": 30,
+                    "detect_registry": "HKLM\\SOFTWARE\\Python\\PythonCore\\3.12",
+                    "website": "https://www.python.org/"
+                },
+                {
+                    "id": "nodejs",
+                    "name": "Node.js LTS",
+                    "description": "Environnement d'exécution JavaScript",
+                    "version": "20.10.0",
+                    "type": "online",
+                    "url": "https://nodejs.org/dist/v20.10.0/node-v20.10.0-x64.msi",
+                    "installer_type": "msi",
+                    "silent_args": "/qn /norestart",
+                    "sha256": "",
+                    "size_mb": 30,
+                    "detect_registry": "HKLM\\SOFTWARE\\Node.js",
+                    "website": "https://nodejs.org/"
+                },
+                {
+                    "id": "putty",
+                    "name": "PuTTY",
+                    "description": "Client SSH et Telnet",
+                    "version": "0.80",
+                    "type": "online",
+                    "url": "https://the.earth.li/~sgtatham/putty/latest/w64/putty-64bit-0.80-installer.msi",
+                    "installer_type": "msi",
+                    "silent_args": "/qn /norestart",
+                    "sha256": "",
+                    "size_mb": 4,
+                    "detect_registry": "HKLM\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\PuTTY",
+                    "website": "https://www.putty.org/"
+                },
+                {
+                    "id": "winscp",
+                    "name": "WinSCP",
+                    "description": "Client SFTP et FTP",
+                    "version": "6.1.2",
+                    "type": "online",
+                    "url": "https://winscp.net/download/WinSCP-6.1.2-Setup.exe",
+                    "installer_type": "exe_inno",
+                    "silent_args": "/VERYSILENT /NORESTART",
+                    "sha256": "",
+                    "size_mb": 12,
+                    "detect_registry": "HKLM\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\winscp3_is1",
+                    "website": "https://winscp.net/"
+                }
+            ]
+        },
+        {
+            "name": "Utilitaires",
+            "icon": "🔧",
+            "software": [
+                {
+                    "id": "7zip",
+                    "name": "7-Zip",
+                    "description": "Archiveur de fichiers gratuit",
+                    "version": "23.01",
+                    "type": "online",
+                    "url": "https://www.7-zip.org/a/7z2301-x64.exe",
+                    "installer_type": "exe",
+                    "silent_args": "/S",
+                    "sha256": "",
+                    "size_mb": 2,
+                    "detect_registry": "HKLM\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\7-Zip",
+                    "website": "https://www.7-zip.org/"
+                },
+                {
+                    "id": "ccleaner",
+                    "name": "CCleaner",
+                    "description": "Outil de nettoyage système",
+                    "version": "latest",
+                    "type": "online",
+                    "url": "https://download.ccleaner.com/ccsetup.exe",
+                    "installer_type": "exe_nsis",
+                    "silent_args": "/S",
+                    "sha256": "",
+                    "size_mb": 40,
+                    "detect_registry": "HKLM\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\CCleaner",
+                    "website": "https://www.ccleaner.com/"
+                },
+                {
+                    "id": "teamviewer",
+                    "name": "TeamViewer",
+                    "description": "Logiciel de contrôle à distance",
+                    "version": "latest",
+                    "type": "online",
+                    "url": "https://download.teamviewer.com/download/TeamViewer_Setup_x64.exe",
+                    "installer_type": "exe",
+                    "silent_args": "/S",
+                    "sha256": "",
+                    "size_mb": 60,
+                    "detect_registry": "HKLM\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\TeamViewer",
+                    "website": "https://www.teamviewer.com/"
+                },
+                {
+                    "id": "anydesk",
+                    "name": "AnyDesk",
+                    "description": "Application de bureau à distance",
+                    "version": "latest",
+                    "type": "online",
+                    "url": "https://download.anydesk.com/AnyDesk.exe",
+                    "installer_type": "exe",
+                    "silent_args": "--install \"C:\\Program Files (x86)\\AnyDesk\" --start-with-win --silent",
+                    "sha256": "",
+                    "size_mb": 5,
+                    "detect_registry": "HKLM\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\AnyDesk",
+                    "website": "https://anydesk.com/"
+                },
+                {
+                    "id": "windirstat",
+                    "name": "WinDirStat",
+                    "description": "Analyseur d'espace disque",
+                    "version": "1.1.2",
+                    "type": "online",
+                    "url": "https://windirstat.net/wds_current_setup.exe",
+                    "installer_type": "exe_inno",
+                    "silent_args": "/VERYSILENT /NORESTART",
+                    "sha256": "",
+                    "size_mb": 2,
+                    "detect_registry": "HKLM\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\WinDirStat",
+                    "website": "https://windirstat.net/"
+                },
+                {
+                    "id": "hwinfo",
+                    "name": "HWiNFO",
+                    "description": "Outil d'information système",
+                    "version": "7.70",
+                    "type": "online",
+                    "url": "https://www.sac.sk/download/utildiag/hwi_770.exe",
+                    "installer_type": "exe",
+                    "silent_args": "/VERYSILENT",
+                    "sha256": "",
+                    "size_mb": 10,
+                    "detect_registry": "HKLM\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\HWiNFO64_is1",
+                    "website": "https://www.hwinfo.com/"
+                }
+            ]
+        },
+        {
+            "name": "Sécurité",
+            "icon": "🛡️",
+            "software": [
+                {
+                    "id": "malwarebytes",
+                    "name": "Malwarebytes",
+                    "description": "Anti-malware gratuit",
+                    "version": "latest",
+                    "type": "online",
+                    "url": "https://downloads.malwarebytes.com/file/mb4_offline",
+                    "installer_type": "exe",
+                    "silent_args": "/VERYSILENT",
+                    "sha256": "",
+                    "size_mb": 250,
+                    "detect_registry": "HKLM\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\Malwarebytes",
+                    "website": "https://www.malwarebytes.com/"
+                },
+                {
+                    "id": "keepass",
+                    "name": "KeePass",
+                    "description": "Gestionnaire de mots de passe",
+                    "version": "2.55",
+                    "type": "online",
+                    "url": "https://sourceforge.net/projects/keepass/files/KeePass%202.x/2.55/KeePass-2.55-Setup.exe/download",
+                    "installer_type": "exe_inno",
+                    "silent_args": "/VERYSILENT /NORESTART",
+                    "sha256": "",
+                    "size_mb": 4,
+                    "detect_registry": "HKLM\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\KeePassPasswordSafe2_is1",
+                    "website": "https://keepass.info/"
+                },
+                {
+                    "id": "bitwarden",
+                    "name": "Bitwarden",
+                    "description": "Gestionnaire de mots de passe open source",
+                    "version": "latest",
+                    "type": "online",
+                    "url": "https://vault.bitwarden.com/download/?app=desktop&platform=windows",
+                    "installer_type": "exe",
+                    "silent_args": "/S",
+                    "sha256": "",
+                    "size_mb": 120,
+                    "detect_registry": "HKCU\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\{6A48F3C8-4A72-4E70-B130-D16EFA67D7EF}_is1",
+                    "website": "https://bitwarden.com/"
+                }
+            ]
+        },
+        {
+            "name": "Graphisme",
+            "icon": "🎨",
+            "software": [
+                {
+                    "id": "gimp",
+                    "name": "GIMP",
+                    "description": "Éditeur d'images libre",
+                    "version": "2.10.36",
+                    "type": "online",
+                    "url": "https://download.gimp.org/gimp/v2.10/windows/gimp-2.10.36-setup.exe",
+                    "installer_type": "exe_inno",
+                    "silent_args": "/VERYSILENT /NORESTART",
+                    "sha256": "",
+                    "size_mb": 300,
+                    "detect_registry": "HKLM\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\GIMP-2_is1",
+                    "website": "https://www.gimp.org/"
+                },
+                {
+                    "id": "inkscape",
+                    "name": "Inkscape",
+                    "description": "Éditeur de graphiques vectoriels",
+                    "version": "1.3.2",
+                    "type": "online",
+                    "url": "https://inkscape.org/gallery/item/44616/inkscape-1.3.2_2023-11-25_091e20e-x64.exe",
+                    "installer_type": "exe",
+                    "silent_args": "/S",
+                    "sha256": "",
+                    "size_mb": 120,
+                    "detect_registry": "HKLM\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\Inkscape",
+                    "website": "https://inkscape.org/"
+                },
+                {
+                    "id": "paintnet",
+                    "name": "Paint.NET",
+                    "description": "Éditeur d'images pour Windows",
+                    "version": "5.0.12",
+                    "type": "online",
+                    "url": "https://github.com/paintdotnet/release/releases/download/v5.0.12/paint.net.5.0.12.install.anycpu.web.zip",
+                    "installer_type": "zip",
+                    "silent_args": "/auto",
+                    "sha256": "",
+                    "size_mb": 80,
+                    "detect_registry": "HKLM\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\{F509F62F-AFBA-4E00-BF66-F10E9A5B2C2B}",
+                    "website": "https://www.getpaint.net/"
+                },
+                {
+                    "id": "sharex",
+                    "name": "ShareX",
+                    "description": "Outil de capture d'écran avancé",
+                    "version": "16.0.1",
+                    "type": "online",
+                    "url": "https://github.com/ShareX/ShareX/releases/download/v16.0.1/ShareX-16.0.1-setup.exe",
+                    "installer_type": "exe_inno",
+                    "silent_args": "/VERYSILENT /NORESTART",
+                    "sha256": "",
+                    "size_mb": 8,
+                    "detect_registry": "HKLM\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\ShareX_is1",
+                    "website": "https://getsharex.com/"
+                },
+                {
+                    "id": "irfanview",
+                    "name": "IrfanView",
+                    "description": "Visionneuse d'images légère",
+                    "version": "4.66",
+                    "type": "online",
+                    "url": "https://www.irfanview.info/files/iview466_x64_setup.exe",
+                    "installer_type": "exe",
+                    "silent_args": "/silent /desktop=1 /thumbs=1 /group=1 /allusers=1",
+                    "sha256": "",
+                    "size_mb": 4,
+                    "detect_registry": "HKLM\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\IrfanView64",
+                    "website": "https://www.irfanview.com/"
+                }
+            ]
+        }
+    ],
+    "local_software": []
+}

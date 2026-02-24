@@ -1,0 +1,29 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.venv/
+venv/
+*.egg-info/
+
+# PyInstaller
+build/
+dist/
+*.spec
+
+# Downloads & logs
+downloads/
+logs/
+
+installers/*.msi
+installers/*.msix
+installers/*.zip
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+Thumbs.db
+Desktop.ini
+.DS_Store
