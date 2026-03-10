@@ -15,6 +15,7 @@ dist/
 downloads/
 logs/
 
+installers/*.exe
 installers/*.msi
 installers/*.msix
 installers/*.zip
