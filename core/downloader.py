@@ -206,10 +206,14 @@ class TerminalDownloader:
 
         logger.info(f"DL terminal {sw_name}: {url}")
 
+        # Récupérer la taille totale pour le pourcentage réel
+        total_size = self._get_remote_size(url)
+        logger.info(f"Taille distante {sw_name}: {_format_size(total_size) if total_size else 'inconnue'}")
+
         if progress_callback:
             progress_callback(DownloadProgress(
-                total_size=0, downloaded_size=0,
-                speed=0, eta=0, percentage=2.0,
+                total_size=total_size, downloaded_size=0,
+                speed=0, eta=0, percentage=0.0,
                 status=DownloadStatus.IN_PROGRESS,
             ))
 
@@ -220,7 +224,7 @@ class TerminalDownloader:
             ("PowerShell", self._dl_powershell),
         ]:
             try:
-                result = method(url, file_path, sw_id, sw_name, progress_callback, cancel_event)
+                result = method(url, file_path, total_size, sw_id, sw_name, progress_callback, cancel_event)
                 if result is not None:
                     return result
             except Exception as e:
@@ -236,14 +240,33 @@ class TerminalDownloader:
             duration=time.time() - start_time,
         )
 
+    def _get_remote_size(self, url: str) -> int:
+        """Récupère la taille du fichier distant via HEAD (curl)."""
+        try:
+            proc = subprocess.run(
+                ["curl.exe", "-sLI", "--connect-timeout", "8",
+                 "-A", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120.0",
+                 url],
+                capture_output=True, text=True, timeout=15,
+                creationflags=subprocess.CREATE_NO_WINDOW,
+            )
+            for line in proc.stdout.splitlines():
+                if line.lower().startswith("content-length:"):
+                    val = line.split(":", 1)[1].strip()
+                    if val.isdigit() and int(val) > 0:
+                        return int(val)
+        except Exception as e:
+            logger.debug(f"HEAD size check failed: {e}")
+        return 0
+
     def _monitor_file_progress(
-        self, process, file_path, sw_id, sw_name,
+        self, process, file_path, total_size, sw_id, sw_name,
         progress_callback, cancel_event, start_time
     ) -> Optional[DownloadResult]:
         """Surveille un process de téléchargement via la taille du fichier"""
         self._active_processes[sw_id] = process
-        last_size = 0
-        last_time = time.time()
+        # Fenêtre glissante pour le calcul de vitesse
+        history: list = []  # [(timestamp, size)]
 
         while process.poll() is None:
             if cancel_event and cancel_event.is_set():
@@ -258,23 +281,38 @@ class TerminalDownloader:
                     duration=time.time() - start_time,
                 )
 
-            time.sleep(0.8)
+            time.sleep(1.0)
 
             if file_path.exists() and progress_callback:
-                current_size = file_path.stat().st_size
+                try:
+                    current_size = file_path.stat().st_size
+                except OSError:
+                    continue
                 now = time.time()
-                elapsed = now - last_time
+                history.append((now, current_size))
 
-                speed = (current_size - last_size) / elapsed if elapsed > 0.1 else 0
-                last_size = current_size
-                last_time = now
+                # Garder les 10 dernières secondes pour calculer la vitesse moyenne
+                cutoff = now - 10.0
+                history = [(t, s) for t, s in history if t >= cutoff]
 
-                # Pourcentage estimé (plafond à 90% en attendant la fin)
-                pct = min(90.0, 5.0 + (current_size / (1024 * 1024)) * 1.5)
+                speed = 0.0
+                if len(history) >= 2:
+                    dt = history[-1][0] - history[0][0]
+                    ds = history[-1][1] - history[0][1]
+                    if dt > 0.5:
+                        speed = ds / dt
+
+                # Pourcentage réel si on connaît la taille, sinon estimation
+                if total_size > 0:
+                    pct = min(99.0, (current_size / total_size) * 100.0)
+                    eta = (total_size - current_size) / speed if speed > 100 else 0
+                else:
+                    pct = min(90.0, 5.0 + (current_size / (1024 * 1024)) * 0.8)
+                    eta = 0
 
                 progress_callback(DownloadProgress(
-                    total_size=0, downloaded_size=current_size,
-                    speed=speed, eta=0, percentage=pct,
+                    total_size=total_size, downloaded_size=current_size,
+                    speed=speed, eta=eta, percentage=pct,
                     status=DownloadStatus.IN_PROGRESS,
                 ))
 
@@ -302,7 +340,7 @@ class TerminalDownloader:
 
         return None  # Signifier l'échec pour essayer le fallback suivant
 
-    def _dl_curl(self, url, file_path, sw_id, sw_name, progress_callback, cancel_event):
+    def _dl_curl(self, url, file_path, total_size, sw_id, sw_name, progress_callback, cancel_event):
         """Télécharge via curl.exe (natif Windows 10+)"""
         start_time = time.time()
 
@@ -332,7 +370,7 @@ class TerminalDownloader:
         )
 
         result = self._monitor_file_progress(
-            process, file_path, sw_id, sw_name,
+            process, file_path, total_size, sw_id, sw_name,
             progress_callback, cancel_event, start_time
         )
 
@@ -347,7 +385,7 @@ class TerminalDownloader:
 
         return result
 
-    def _dl_bits(self, url, file_path, sw_id, sw_name, progress_callback, cancel_event):
+    def _dl_bits(self, url, file_path, total_size, sw_id, sw_name, progress_callback, cancel_event):
         """Télécharge via BITS (Background Intelligent Transfer Service)"""
         start_time = time.time()
 
@@ -364,7 +402,7 @@ class TerminalDownloader:
         )
 
         result = self._monitor_file_progress(
-            process, file_path, sw_id, sw_name,
+            process, file_path, total_size, sw_id, sw_name,
             progress_callback, cancel_event, start_time
         )
 
@@ -376,7 +414,7 @@ class TerminalDownloader:
 
         return result
 
-    def _dl_powershell(self, url, file_path, sw_id, sw_name, progress_callback, cancel_event):
+    def _dl_powershell(self, url, file_path, total_size, sw_id, sw_name, progress_callback, cancel_event):
         """Fallback: Invoke-WebRequest PowerShell"""
         start_time = time.time()
 
@@ -394,7 +432,7 @@ class TerminalDownloader:
         )
 
         result = self._monitor_file_progress(
-            process, file_path, sw_id, sw_name,
+            process, file_path, total_size, sw_id, sw_name,
             progress_callback, cancel_event, start_time
         )
 
