@@ -5,6 +5,7 @@ Point d'entrée principal de l'application
 
 import sys
 import os
+from datetime import datetime
 from pathlib import Path
 
 
@@ -31,6 +32,20 @@ def get_internal_path() -> Path:
         return Path(__file__).resolve().parent
 
 
+def get_installation_date() -> str:
+    """
+    Date d'installation estimée:
+    - mode .exe: date de création de l'exécutable
+    - mode script: date de création de main.py
+    """
+    try:
+        target = Path(sys.executable).resolve() if getattr(sys, 'frozen', False) else Path(__file__).resolve()
+        created_at = datetime.fromtimestamp(target.stat().st_ctime)
+        return created_at.date().isoformat()
+    except Exception:
+        return datetime.now().date().isoformat()
+
+
 BASE_PATH = get_base_path()
 INTERNAL_PATH = get_internal_path()
 sys.path.insert(0, str(BASE_PATH))
@@ -53,6 +68,7 @@ def main():
 
     # ─── 2. Charger la configuration ───
     from core.catalog_manager import CatalogManager, SettingsManager
+    from core.license_manager import LicenseManager
 
     # Config : d'abord à côté de l'exe, sinon embarquée (_MEIPASS)
     settings_path = BASE_PATH / "config" / "settings.json"
@@ -66,7 +82,16 @@ def main():
     settings = SettingsManager(settings_path)
     logger.info(f"Configuration chargée: {settings.app_name} v{settings.version}")
 
-    catalog = CatalogManager(catalog_path)
+    license_file = BASE_PATH / "config" / "license.json"
+    license_manager = LicenseManager(
+        license_file,
+        installation_date=get_installation_date(),
+    )
+
+    catalog = CatalogManager(
+        catalog_path,
+        offline_path=BASE_PATH / settings.get("offline_folder", "offline")
+    )
     logger.info(
         f"Catalogue: {catalog.get_software_count()} logiciels "
         f"dans {catalog.get_category_count()} catégories"
@@ -84,7 +109,7 @@ def main():
             sys.exit(1)
 
     # ─── 4. Créer les dossiers nécessaires ───
-    for folder_key in ["download_folder", "installers_folder", "logs_folder"]:
+    for folder_key in ["download_folder", "installers_folder", "offline_folder", "logs_folder"]:
         folder = BASE_PATH / settings.get(folder_key, folder_key)
         folder.mkdir(parents=True, exist_ok=True)
 
@@ -105,6 +130,7 @@ def main():
         catalog=catalog,
         settings=settings,
         base_path=BASE_PATH,
+        license_manager=license_manager,
     )
 
     app.mainloop()

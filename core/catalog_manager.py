@@ -4,7 +4,9 @@ Charge, filtre et gère le catalogue de logiciels
 """
 
 import json
+import copy
 import logging
+import re
 from pathlib import Path
 from typing import List, Dict, Optional
 
@@ -14,8 +16,11 @@ logger = logging.getLogger(__name__)
 class CatalogManager:
     """Gestionnaire du catalogue de logiciels"""
 
-    def __init__(self, catalog_path: Path):
+    OFFLINE_EXTENSIONS = {".exe", ".msi", ".msix", ".zip"}
+
+    def __init__(self, catalog_path: Path, offline_path: Optional[Path] = None):
         self.catalog_path = catalog_path
+        self.offline_path = offline_path
         self._catalog: Dict = {}
         self._categories: List[Dict] = []
         self._all_software: List[Dict] = []
@@ -27,7 +32,9 @@ class CatalogManager:
             with open(self.catalog_path, 'r', encoding='utf-8') as f:
                 self._catalog = json.load(f)
 
-            self._categories = self._catalog.get("categories", [])
+            # Important: copie profonde pour ne jamais modifier le JSON d'origine
+            self._categories = copy.deepcopy(self._catalog.get("categories", []))
+            self._append_offline_categories()
             self._build_software_index()
 
             logger.info(
@@ -45,6 +52,86 @@ class CatalogManager:
         except Exception as e:
             logger.exception(f"Erreur lors du chargement du catalogue: {e}")
             return False
+
+    def _append_offline_categories(self):
+        """
+        Ajoute des catégories offline générées automatiquement depuis:
+        offline/<classification>/*.exe|*.msi|*.msix|*.zip
+
+        - Le nom du setup est utilisé comme nom logiciel.
+        - Les sous-dossiers de premier niveau servent de classifications.
+        """
+        if not self.offline_path:
+            return
+
+        offline_root = Path(self.offline_path)
+        if not offline_root.exists() or not offline_root.is_dir():
+            return
+
+        grouped: Dict[str, List[Dict]] = {}
+
+        for file_path in offline_root.rglob("*"):
+            if not file_path.is_file() or file_path.suffix.lower() not in self.OFFLINE_EXTENSIONS:
+                continue
+
+            rel_path = file_path.relative_to(offline_root)
+            classification = rel_path.parts[0] if len(rel_path.parts) > 1 else "Général"
+
+            grouped.setdefault(classification, []).append(
+                self._build_offline_software(file_path=file_path, rel_path=rel_path)
+            )
+
+        if not grouped:
+            return
+
+        for classification in sorted(grouped.keys(), key=lambda x: x.lower()):
+            software_items = sorted(grouped[classification], key=lambda s: s.get("name", "").lower())
+            self._categories.append({
+                "name": f"Offline / {classification}",
+                "icon": "📁",
+                "software": software_items,
+            })
+
+        logger.info(
+            "Offline chargé: %s classification(s), %s setup(s)",
+            len(grouped),
+            sum(len(v) for v in grouped.values())
+        )
+
+    def _build_offline_software(self, file_path: Path, rel_path: Path) -> Dict:
+        """Construit une entrée logiciel depuis un setup offline."""
+        stem = file_path.stem
+        display_name = re.sub(r"[_\-]+", " ", stem).strip() or stem
+        slug = re.sub(r"[^a-z0-9]+", "_", rel_path.as_posix().lower()).strip("_")
+
+        installer_type_map = {
+            ".msi": "msi",
+            ".msix": "msix",
+            ".zip": "zip",
+            ".exe": "exe",
+        }
+        installer_type = installer_type_map.get(file_path.suffix.lower(), "exe")
+
+        try:
+            size_mb = round(file_path.stat().st_size / (1024 * 1024), 1)
+        except OSError:
+            size_mb = 0
+
+        return {
+            "id": f"offline_{slug}",
+            "name": display_name,
+            "description": f"Setup offline local ({file_path.suffix.lower().replace('.', '').upper()})",
+            "version": "offline",
+            "type": "offline",
+            "url": "",
+            "installer_type": installer_type,
+            "silent_args": "",
+            "sha256": "",
+            "size_mb": size_mb,
+            "detect_registry": "",
+            "website": "",
+            "local_file": rel_path.as_posix(),
+        }
 
     def _build_software_index(self):
         """Construit l'index plat de tous les logiciels"""
@@ -183,6 +270,7 @@ class SettingsManager:
         "theme": "dark",
         "download_folder": "downloads",
         "installers_folder": "installers",
+        "offline_folder": "offline",
         "logs_folder": "logs",
         "max_concurrent_downloads": 3,
         "verify_hash": True,

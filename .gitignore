@@ -19,6 +19,11 @@ installers/*.exe
 installers/*.msi
 installers/*.msix
 installers/*.zip
+offline/**/*.exe
+offline/**/*.msi
+offline/**/*.msix
+offline/**/*.zip
+config/license.json
 
 # IDE
 .vscode/

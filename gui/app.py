@@ -5,7 +5,7 @@ Application de gestion et d'installation de logiciels avec CustomTkinter
 
 import customtkinter as ctk
 import tkinter as tk
-from tkinter import messagebox, filedialog
+from tkinter import messagebox, filedialog, simpledialog
 import threading
 import logging
 import webbrowser
@@ -15,6 +15,7 @@ from typing import Optional, Dict, List, Callable
 from core.catalog_manager import CatalogManager, SettingsManager
 from core.downloader import DownloadManager, DownloadStatus, DownloadProgress, DownloadResult, LocalInstallerDetector
 from core.installer import InstallerManager, InstallStatus, InstallResult
+from core.license_manager import LicenseManager
 
 logger = logging.getLogger(__name__)
 
@@ -272,19 +273,24 @@ class SoftwareManagerApp(ctk.CTk):
         self,
         catalog: CatalogManager,
         settings: SettingsManager,
-        base_path: Path
+        base_path: Path,
+        license_manager: LicenseManager,
     ):
         super().__init__()
 
         self.catalog = catalog
         self.settings = settings
         self.base_path = base_path
+        self.license_manager = license_manager
 
         # Managers
         self.download_manager = DownloadManager(
             download_folder=base_path / settings.download_folder,
             installers_folder=base_path / settings.get("installers_folder", "installers"),
             max_concurrent=settings.max_concurrent_downloads,
+            additional_local_folders=[
+                base_path / settings.get("offline_folder", "offline")
+            ],
         )
         self.installer_manager = InstallerManager(base_path)
 
@@ -293,9 +299,12 @@ class SoftwareManagerApp(ctk.CTk):
         self._progress_cards: Dict[str, ProgressCard] = {}
         self._current_category: Optional[str] = None
         self._is_processing = False
+        self._current_download_id: Optional[str] = None
+        self._download_paused = False
 
         self._configure_window()
         self._build_ui()
+        self._refresh_license_ui()
         self._show_category(None)  # Afficher tous les logiciels
 
     # ─────────────── Configuration fenêtre ───────────────
@@ -443,6 +452,77 @@ class SoftwareManagerApp(ctk.CTk):
             text_color=Theme.TEXT_DARK,
         ).pack(anchor="w")
 
+        # Statut licence / essai
+        self.license_card = ctk.CTkFrame(
+            bottom_frame,
+            fg_color=Theme.INPUT_BG,
+            corner_radius=10,
+            border_width=1,
+            border_color=Theme.BORDER,
+        )
+        self.license_card.pack(fill="x", pady=(8, 0))
+        self.license_card.grid_columnconfigure(0, weight=1)
+
+        self.license_title = ctk.CTkLabel(
+            self.license_card,
+            text="🔐 Licence & Essai",
+            font=ctk.CTkFont(size=12, weight="bold"),
+            text_color=Theme.TEXT,
+            anchor="w",
+        )
+        self.license_title.grid(row=0, column=0, sticky="ew", padx=10, pady=(8, 0))
+
+        self.license_plan_badge = ctk.CTkLabel(
+            self.license_card,
+            text="",
+            font=ctk.CTkFont(size=10, weight="bold"),
+            corner_radius=8,
+            fg_color=Theme.BG_SIDEBAR,
+            text_color=Theme.TEXT,
+            padx=8,
+            pady=2,
+        )
+        self.license_plan_badge.grid(row=1, column=0, sticky="w", padx=10, pady=(6, 0))
+
+        self.license_label = ctk.CTkLabel(
+            self.license_card,
+            text="",
+            font=ctk.CTkFont(size=11, weight="bold"),
+            text_color=Theme.WARNING,
+            anchor="w",
+        )
+        self.license_label.grid(row=2, column=0, sticky="ew", padx=10, pady=(6, 0))
+
+        self.license_period_label = ctk.CTkLabel(
+            self.license_card,
+            text="",
+            font=ctk.CTkFont(size=10),
+            text_color=Theme.TEXT_DIM,
+            anchor="w",
+        )
+        self.license_period_label.grid(row=3, column=0, sticky="ew", padx=10, pady=(2, 0))
+
+        self.license_progress = ctk.CTkProgressBar(
+            self.license_card,
+            height=6,
+            progress_color=Theme.ACCENT,
+            fg_color=Theme.PROGRESS_BG,
+            corner_radius=4,
+        )
+        self.license_progress.grid(row=4, column=0, sticky="ew", padx=10, pady=(8, 0))
+        self.license_progress.set(0)
+
+        self.activate_pro_btn = ctk.CTkButton(
+            self.license_card,
+            text="🔑 Activer essai Pro",
+            font=ctk.CTkFont(size=11, weight="bold"),
+            fg_color=Theme.ACCENT,
+            hover_color=Theme.ACCENT_HOVER,
+            height=30,
+            command=self._activate_pro_trial_prompt,
+        )
+        self.activate_pro_btn.grid(row=5, column=0, sticky="ew", padx=10, pady=(8, 10))
+
         # Info setups locaux
         local_count = self.download_manager.get_local_count()
         if local_count > 0:
@@ -452,6 +532,78 @@ class SoftwareManagerApp(ctk.CTk):
                 font=ctk.CTkFont(size=10),
                 text_color=Theme.SUCCESS,
             ).pack(anchor="w", pady=(2, 0))
+
+    def _refresh_license_ui(self):
+        """Met à jour l'état licence/essai dans la sidebar."""
+        status = self.license_manager.get_status()
+        plan = status.get("plan")
+
+        def _set_progress(days_left: int, total_days: int):
+            if total_days <= 0:
+                self.license_progress.set(0)
+                return
+            used = max(0, min(total_days, total_days - days_left))
+            self.license_progress.set(used / total_days)
+
+        if plan == "pro_trial":
+            days_left = status.get('pro_days_left', 0)
+            total_days = status.get('pro_total_days', 30)
+            self.license_plan_badge.configure(text="PRO TRIAL", fg_color="#3b2f8f", text_color=Theme.TEXT)
+            self.license_label.configure(
+                text=f"✨ Essai Pro actif — {days_left} jour(s) restant(s)",
+                text_color=Theme.SUCCESS,
+            )
+            self.license_period_label.configure(
+                text=f"Période: {status.get('pro_trial_start', '')} → {status.get('pro_trial_end', '')}"
+            )
+            _set_progress(days_left, total_days)
+            self.activate_pro_btn.configure(state="disabled", text="🔓 Pro actif")
+        elif plan == "free_trial":
+            days_left = status.get('free_days_left', 0)
+            total_days = status.get('free_total_days', 30)
+            self.license_plan_badge.configure(text="FREE TRIAL", fg_color=Theme.BG_SIDEBAR, text_color=Theme.TEXT)
+            self.license_label.configure(
+                text=f"🆓 Essai gratuit — {days_left} jour(s) restant(s)",
+                text_color=Theme.WARNING,
+            )
+            self.license_period_label.configure(
+                text=f"Installation: {status.get('installation_date', '')}"
+            )
+            _set_progress(days_left, total_days)
+            self.activate_pro_btn.configure(state="normal", text="🔑 Activer essai Pro")
+        else:
+            self.license_plan_badge.configure(text="EXPIRED", fg_color="#5c1f2d", text_color=Theme.TEXT)
+            self.license_label.configure(
+                text="⛔ Essai expiré",
+                text_color=Theme.ERROR,
+            )
+            self.license_period_label.configure(
+                text=f"Fin essai gratuit: {status.get('free_trial_end', '')}"
+            )
+            self.license_progress.set(1.0)
+            self.activate_pro_btn.configure(state="normal", text="🔑 Activer essai Pro")
+
+        if hasattr(self, "install_btn"):
+            can_use = status.get("can_use", False)
+            self.install_btn.configure(state="normal" if can_use else "disabled")
+
+    def _activate_pro_trial_prompt(self):
+        """Demande la clé produit et active l'essai Pro."""
+        key = simpledialog.askstring(
+            "Clé produit",
+            "Entrez votre clé produit pour activer l'essai Pro (30 jours) :",
+            parent=self,
+        )
+        if key is None:
+            return
+
+        ok, message = self.license_manager.activate_pro_trial(key)
+        if ok:
+            messagebox.showinfo("Activation réussie", message)
+        else:
+            messagebox.showwarning("Activation", message)
+
+        self._refresh_license_ui()
 
     def _build_main_area(self):
         """Zone principale avec la liste des logiciels"""
@@ -517,6 +669,19 @@ class SoftwareManagerApp(ctk.CTk):
             command=self._start_install_selected,
         )
         self.install_btn.pack(side="left", padx=4)
+
+        self.pause_btn = ctk.CTkButton(
+            btn_frame,
+            text="⏸️  Pause DL",
+            font=ctk.CTkFont(size=12, weight="bold"),
+            fg_color=Theme.BG_SIDEBAR,
+            hover_color=Theme.ACCENT,
+            width=130,
+            height=36,
+            state="disabled",
+            command=self._toggle_download_pause,
+        )
+        self.pause_btn.pack(side="left", padx=4)
 
         # ─── Zone scrollable pour les logiciels ───
         self.content_frame = ctk.CTkFrame(main_frame, fg_color="transparent")
@@ -689,6 +854,14 @@ class SoftwareManagerApp(ctk.CTk):
     # ─────────────── Installation ───────────────
     def _start_install_selected(self):
         """Démarre le téléchargement et l'installation des logiciels sélectionnés"""
+        if not self.license_manager.can_use_app():
+            messagebox.showerror(
+                "Essai expiré",
+                "Votre période d'essai gratuit est expirée.\n"
+                "Activez l'essai Pro avec une clé produit pour continuer."
+            )
+            return
+
         if self._is_processing:
             messagebox.showwarning(
                 "En cours",
@@ -726,7 +899,10 @@ class SoftwareManagerApp(ctk.CTk):
             return
 
         self._is_processing = True
+        self._download_paused = False
+        self._current_download_id = None
         self.install_btn.configure(state="disabled", text="⏳  Installation en cours...")
+        self.pause_btn.configure(state="normal", text="⏸️  Pause DL")
 
         # Préparer le panel de progression
         self._clear_progress_panel()
@@ -755,6 +931,9 @@ class SoftwareManagerApp(ctk.CTk):
         for idx, sw in enumerate(software_list):
             sw_id = sw.get("id", "unknown")
             sw_name = sw.get("name", "Inconnu")
+            self._current_download_id = sw_id
+            self._download_paused = False
+            self.after(0, lambda: self.pause_btn.configure(text="⏸️  Pause DL"))
 
             progress_card = self._progress_cards.get(sw_id)
 
@@ -776,6 +955,12 @@ class SoftwareManagerApp(ctk.CTk):
                             f"📁 Setup local trouvé !",
                             "Installation directe..."
                         )
+                    elif progress.status == DownloadStatus.PAUSED:
+                        self._update_progress_card(
+                            sid, pct * 0.7,
+                            "⏸ Téléchargement en pause",
+                            "Cliquez sur Reprendre DL pour continuer"
+                        )
                     else:
                         speed_str = DownloadManager.format_speed(progress.speed)
                         eta_str = DownloadManager.format_eta(progress.eta)
@@ -793,6 +978,7 @@ class SoftwareManagerApp(ctk.CTk):
                 if dl_result.status != DownloadStatus.COMPLETED:
                     self._set_progress_complete(sw_id, False, f"Échec DL: {dl_result.message}")
                     fail_count += 1
+                    self._current_download_id = None
                     continue
 
                 # ─ Étape 2 : Installation ─
@@ -829,6 +1015,10 @@ class SoftwareManagerApp(ctk.CTk):
                 logger.exception(f"Erreur pour {sw_name}")
                 self._set_progress_complete(sw_id, False, f"Erreur: {str(e)}")
                 fail_count += 1
+            finally:
+                self._current_download_id = None
+                self._download_paused = False
+                self.after(0, lambda: self.pause_btn.configure(text="⏸️  Pause DL"))
 
         # Fin du traitement
         self._finalize_processing(total, success_count, fail_count)
@@ -868,6 +1058,10 @@ class SoftwareManagerApp(ctk.CTk):
                 state="normal",
                 text="⬇️  Installer la sélection"
             )
+            self.pause_btn.configure(
+                state="disabled",
+                text="⏸️  Pause DL"
+            )
 
             self.stats_label.configure(
                 text=f"Terminé: {success} ✓  {fail} ✗  sur {total}"
@@ -890,6 +1084,42 @@ class SoftwareManagerApp(ctk.CTk):
                 card.is_checked = False
 
         self.after(0, _update)
+
+    def _toggle_download_pause(self):
+        """Met en pause / reprend le téléchargement actif"""
+        if not self._is_processing:
+            return
+
+        sw_id = self._current_download_id
+        if not sw_id:
+            messagebox.showinfo(
+                "Téléchargement",
+                "Aucun téléchargement actif pour le moment."
+            )
+            return
+
+        if not self._download_paused:
+            paused = self.download_manager.pause_download(sw_id)
+            if paused:
+                self._download_paused = True
+                self.pause_btn.configure(text="▶️  Reprendre DL")
+                self.stats_label.configure(text="Téléchargement en pause")
+            else:
+                messagebox.showwarning(
+                    "Pause impossible",
+                    "Impossible de mettre en pause ce téléchargement actuellement."
+                )
+        else:
+            resumed = self.download_manager.resume_download(sw_id)
+            if resumed:
+                self._download_paused = False
+                self.pause_btn.configure(text="⏸️  Pause DL")
+                self.stats_label.configure(text="Téléchargement repris")
+            else:
+                messagebox.showwarning(
+                    "Reprise impossible",
+                    "Impossible de reprendre ce téléchargement actuellement."
+                )
 
     def _clear_progress_panel(self):
         """Nettoie le panel de progression"""

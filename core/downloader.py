@@ -62,9 +62,15 @@ class LocalInstallerDetector:
 
     INSTALLER_EXTENSIONS = {'.exe', '.msi', '.msix', '.zip'}
 
-    def __init__(self, installers_folder):
+    def __init__(self, installers_folder, additional_folders: Optional[List[Path]] = None):
         self.installers_folder = Path(installers_folder)
         self.installers_folder.mkdir(parents=True, exist_ok=True)
+
+        self.search_folders: List[Path] = [self.installers_folder]
+        for folder in additional_folders or []:
+            p = Path(folder)
+            if p not in self.search_folders:
+                self.search_folders.append(p)
 
     def find_installer(self, software: Dict) -> Optional[Path]:
         """
@@ -79,29 +85,43 @@ class LocalInstallerDetector:
         sw_id = software.get("id", "").lower()
         sw_name = software.get("name", "").lower()
 
-        if not self.installers_folder.exists():
+        if not any(folder.exists() for folder in self.search_folders):
             return None
 
         # 1. Champ local_file explicite
         local_file = software.get("local_file", "")
         if local_file:
-            path = self.installers_folder / local_file
-            if path.exists():
-                logger.info(f"Setup local (explicit): {path}")
-                return path
+            local_file_path = Path(local_file)
+
+            # Autoriser un chemin absolu direct
+            if local_file_path.is_absolute() and local_file_path.exists():
+                logger.info(f"Setup local (explicit absolute): {local_file_path}")
+                return local_file_path
+
+            # Sinon chercher le chemin relatif dans chaque dossier racine
+            for folder in self.search_folders:
+                path = folder / local_file_path
+                if path.exists():
+                    logger.info(f"Setup local (explicit): {path}")
+                    return path
 
         # 2. Nom exact : <id>.<ext>
         for ext in self.INSTALLER_EXTENSIONS:
-            exact_path = self.installers_folder / f"{sw_id}{ext}"
-            if exact_path.exists():
-                logger.info(f"Setup local (exact): {exact_path}")
-                return exact_path
+            for folder in self.search_folders:
+                exact_path = folder / f"{sw_id}{ext}"
+                if exact_path.exists():
+                    logger.info(f"Setup local (exact): {exact_path}")
+                    return exact_path
 
         # Lister les fichiers installateurs disponibles
-        all_files = [
-            f for f in self.installers_folder.iterdir()
-            if f.is_file() and f.suffix.lower() in self.INSTALLER_EXTENSIONS
-        ]
+        all_files: List[Path] = []
+        for folder in self.search_folders:
+            if not folder.exists():
+                continue
+            all_files.extend(
+                f for f in folder.rglob("*")
+                if f.is_file() and f.suffix.lower() in self.INSTALLER_EXTENSIONS
+            )
 
         # 3. Fichier contenant l'ID
         if sw_id:
@@ -124,20 +144,23 @@ class LocalInstallerDetector:
     def list_available_installers(self) -> List[Tuple[str, int]]:
         """Liste tous les installateurs présents"""
         result = []
-        if self.installers_folder.exists():
-            for f in self.installers_folder.iterdir():
-                if f.is_file() and f.suffix.lower() in self.INSTALLER_EXTENSIONS:
-                    result.append((f.name, f.stat().st_size))
+        for folder in self.search_folders:
+            if folder.exists():
+                for f in folder.rglob("*"):
+                    if f.is_file() and f.suffix.lower() in self.INSTALLER_EXTENSIONS:
+                        result.append((str(f), f.stat().st_size))
         return sorted(result)
 
     def get_installer_count(self) -> int:
         """Nombre d'installateurs locaux disponibles"""
-        if not self.installers_folder.exists():
-            return 0
-        return sum(
-            1 for f in self.installers_folder.iterdir()
-            if f.is_file() and f.suffix.lower() in self.INSTALLER_EXTENSIONS
-        )
+        count = 0
+        for folder in self.search_folders:
+            if folder.exists():
+                count += sum(
+                    1 for f in folder.rglob("*")
+                    if f.is_file() and f.suffix.lower() in self.INSTALLER_EXTENSIONS
+                )
+        return count
 
 
 # ━━━━━━━━━━━━━━━━━━━━━━ Téléchargement via terminal ━━━━━━━━━━━━━━━━━━━━━━
@@ -178,6 +201,7 @@ class TerminalDownloader:
         software: Dict,
         progress_callback: Optional[Callable[[DownloadProgress], None]] = None,
         cancel_event: Optional[threading.Event] = None,
+        pause_event: Optional[threading.Event] = None,
     ) -> DownloadResult:
         """
         Télécharge via curl → BITS → PowerShell (cascade de fallbacks).
@@ -196,13 +220,19 @@ class TerminalDownloader:
 
         if cancel_event is None:
             cancel_event = threading.Event()
+        if pause_event is None:
+            pause_event = threading.Event()
 
         filename = self._get_filename(url, software)
         file_path = self.download_folder / filename
 
-        # Supprimer fichier partiel
+        # Nouveau téléchargement: repartir proprement.
+        # En cas de pause/reprise, le fichier partiel est conservé pour reprise.
         if file_path.exists():
-            file_path.unlink()
+            try:
+                file_path.unlink()
+            except OSError:
+                pass
 
         logger.info(f"DL terminal {sw_name}: {url}")
 
@@ -217,20 +247,86 @@ class TerminalDownloader:
                 status=DownloadStatus.IN_PROGRESS,
             ))
 
-        # Essayer les méthodes dans l'ordre
-        for method_name, method in [
-            ("curl", self._dl_curl),
-            ("BITS", self._dl_bits),
-            ("PowerShell", self._dl_powershell),
-        ]:
-            try:
-                result = method(url, file_path, total_size, sw_id, sw_name, progress_callback, cancel_event)
-                if result is not None:
-                    return result
-            except Exception as e:
-                logger.info(f"{method_name} échoué: {e}")
-                if file_path.exists():
-                    file_path.unlink()
+        resume_from_partial = False
+
+        while True:
+            # En reprise, tenter d'abord curl qui supporte nativement --continue-at.
+            method_chain = [
+                ("curl", self._dl_curl),
+                ("BITS", self._dl_bits),
+                ("PowerShell", self._dl_powershell),
+            ]
+
+            for method_name, method in method_chain:
+                try:
+                    result = method(
+                        url,
+                        file_path,
+                        total_size,
+                        sw_id,
+                        sw_name,
+                        progress_callback,
+                        cancel_event,
+                        pause_event,
+                        resume_from_partial,
+                    )
+
+                    if result is None:
+                        continue
+
+                    if result.status == DownloadStatus.PAUSED:
+                        logger.info(f"Téléchargement en pause pour {sw_name}")
+                        if progress_callback:
+                            partial_size = file_path.stat().st_size if file_path.exists() else 0
+                            pct = (partial_size / total_size) * 100.0 if total_size > 0 else result.duration
+                            progress_callback(DownloadProgress(
+                                total_size=total_size,
+                                downloaded_size=partial_size,
+                                speed=0,
+                                eta=0,
+                                percentage=min(99.0, pct if total_size > 0 else 0.0),
+                                status=DownloadStatus.PAUSED,
+                            ))
+
+                        # Attendre la reprise ou une annulation
+                        while pause_event.is_set() and not cancel_event.is_set():
+                            time.sleep(0.2)
+
+                        if cancel_event.is_set():
+                            if file_path.exists():
+                                try:
+                                    file_path.unlink()
+                                except OSError:
+                                    pass
+                            return DownloadResult(
+                                software_id=sw_id,
+                                file_path=None,
+                                status=DownloadStatus.CANCELLED,
+                                message="Téléchargement annulé",
+                                duration=time.time() - start_time,
+                            )
+
+                        resume_from_partial = True
+                        # Reboucler pour relancer le download en reprise
+                        break
+
+                    if result.status in (DownloadStatus.CANCELLED, DownloadStatus.COMPLETED):
+                        return result
+
+                except Exception as e:
+                    logger.info(f"{method_name} échoué: {e}")
+                    if file_path.exists() and not resume_from_partial:
+                        try:
+                            file_path.unlink()
+                        except OSError:
+                            pass
+                    continue
+            else:
+                # Aucun fallback n'a abouti sur ce cycle
+                break
+
+            # Si on sort du for via break après une pause → reprendre la boucle while
+            if resume_from_partial and not pause_event.is_set():
                 continue
 
         return DownloadResult(
@@ -261,7 +357,7 @@ class TerminalDownloader:
 
     def _monitor_file_progress(
         self, process, file_path, total_size, sw_id, sw_name,
-        progress_callback, cancel_event, start_time
+        progress_callback, cancel_event, pause_event, start_time
     ) -> Optional[DownloadResult]:
         """Surveille un process de téléchargement via la taille du fichier"""
         self._active_processes[sw_id] = process
@@ -272,12 +368,26 @@ class TerminalDownloader:
             if cancel_event and cancel_event.is_set():
                 process.kill()
                 process.wait()
+                self._active_processes.pop(sw_id, None)
                 if file_path.exists():
                     file_path.unlink()
                 return DownloadResult(
                     software_id=sw_id, file_path=None,
                     status=DownloadStatus.CANCELLED,
                     message="Téléchargement annulé",
+                    duration=time.time() - start_time,
+                )
+
+            if pause_event and pause_event.is_set():
+                process.kill()
+                process.wait()
+                self._active_processes.pop(sw_id, None)
+                partial_size = file_path.stat().st_size if file_path.exists() else 0
+                return DownloadResult(
+                    software_id=sw_id,
+                    file_path=file_path if file_path.exists() else None,
+                    status=DownloadStatus.PAUSED,
+                    message=f"Téléchargement en pause ({_format_size(partial_size)})",
                     duration=time.time() - start_time,
                 )
 
@@ -340,7 +450,7 @@ class TerminalDownloader:
 
         return None  # Signifier l'échec pour essayer le fallback suivant
 
-    def _dl_curl(self, url, file_path, total_size, sw_id, sw_name, progress_callback, cancel_event):
+    def _dl_curl(self, url, file_path, total_size, sw_id, sw_name, progress_callback, cancel_event, pause_event, resume_from_partial=False):
         """Télécharge via curl.exe (natif Windows 10+)"""
         start_time = time.time()
 
@@ -363,6 +473,11 @@ class TerminalDownloader:
             url,
         ]
 
+        # Reprise: continuer à partir de la taille locale du fichier
+        if resume_from_partial and file_path.exists() and file_path.stat().st_size > 0:
+            cmd.insert(1, "-")
+            cmd.insert(1, "-C")
+
         logger.info(f"curl: {sw_name}")
         process = subprocess.Popen(
             cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
@@ -371,7 +486,7 @@ class TerminalDownloader:
 
         result = self._monitor_file_progress(
             process, file_path, total_size, sw_id, sw_name,
-            progress_callback, cancel_event, start_time
+            progress_callback, cancel_event, pause_event, start_time
         )
 
         if result:
@@ -385,7 +500,7 @@ class TerminalDownloader:
 
         return result
 
-    def _dl_bits(self, url, file_path, total_size, sw_id, sw_name, progress_callback, cancel_event):
+    def _dl_bits(self, url, file_path, total_size, sw_id, sw_name, progress_callback, cancel_event, pause_event, resume_from_partial=False):
         """Télécharge via BITS (Background Intelligent Transfer Service)"""
         start_time = time.time()
 
@@ -403,7 +518,7 @@ class TerminalDownloader:
 
         result = self._monitor_file_progress(
             process, file_path, total_size, sw_id, sw_name,
-            progress_callback, cancel_event, start_time
+            progress_callback, cancel_event, pause_event, start_time
         )
 
         if result:
@@ -414,7 +529,7 @@ class TerminalDownloader:
 
         return result
 
-    def _dl_powershell(self, url, file_path, total_size, sw_id, sw_name, progress_callback, cancel_event):
+    def _dl_powershell(self, url, file_path, total_size, sw_id, sw_name, progress_callback, cancel_event, pause_event, resume_from_partial=False):
         """Fallback: Invoke-WebRequest PowerShell"""
         start_time = time.time()
 
@@ -433,7 +548,7 @@ class TerminalDownloader:
 
         result = self._monitor_file_progress(
             process, file_path, total_size, sw_id, sw_name,
-            progress_callback, cancel_event, start_time
+            progress_callback, cancel_event, pause_event, start_time
         )
 
         if result:
@@ -476,25 +591,47 @@ class DownloadManager:
     2. Sinon télécharge via terminal (curl > BITS > PowerShell)
     """
 
-    def __init__(self, download_folder, installers_folder, max_concurrent: int = 3):
+    def __init__(
+        self,
+        download_folder,
+        installers_folder,
+        max_concurrent: int = 3,
+        additional_local_folders: Optional[List[Path]] = None,
+    ):
         self.download_folder = Path(download_folder)
         self.download_folder.mkdir(parents=True, exist_ok=True)
         self.max_concurrent = max_concurrent
 
-        self.local_detector = LocalInstallerDetector(installers_folder)
+        self.local_detector = LocalInstallerDetector(
+            installers_folder,
+            additional_folders=additional_local_folders,
+        )
         self.terminal_downloader = TerminalDownloader(download_folder)
+        self._cancel_events: Dict[str, threading.Event] = {}
+        self._pause_events: Dict[str, threading.Event] = {}
 
     def download_file(
         self,
         software: Dict,
         progress_callback: Optional[Callable[[DownloadProgress], None]] = None,
         cancel_event: Optional[threading.Event] = None,
+        pause_event: Optional[threading.Event] = None,
     ) -> DownloadResult:
         """
         Obtient l'installateur : local si dispo, sinon téléchargement terminal.
         """
         sw_id = software.get("id", "unknown")
         sw_name = software.get("name", "Unknown")
+
+        if cancel_event is None:
+            cancel_event = self._cancel_events.get(sw_id) or threading.Event()
+        if pause_event is None:
+            pause_event = self._pause_events.get(sw_id) or threading.Event()
+
+        cancel_event.clear()
+
+        self._cancel_events[sw_id] = cancel_event
+        self._pause_events[sw_id] = pause_event
 
         # ─── 1. Setup local ? ───
         local_path = self.local_detector.find_installer(software)
@@ -520,17 +657,41 @@ class DownloadManager:
 
         # ─── 2. Téléchargement terminal ───
         logger.info(f"Pas de setup local pour {sw_name} → téléchargement terminal")
-        return self.terminal_downloader.download_file(
-            software,
-            progress_callback=progress_callback,
-            cancel_event=cancel_event,
-        )
+        try:
+            return self.terminal_downloader.download_file(
+                software,
+                progress_callback=progress_callback,
+                cancel_event=cancel_event,
+                pause_event=pause_event,
+            )
+        finally:
+            self._cancel_events.pop(sw_id, None)
+            self._pause_events.pop(sw_id, None)
 
     def cancel_download(self, software_id: str):
+        cancel_evt = self._cancel_events.get(software_id)
+        if cancel_evt:
+            cancel_evt.set()
         self.terminal_downloader.cancel_download(software_id)
 
     def cancel_all_downloads(self):
+        for evt in self._cancel_events.values():
+            evt.set()
         self.terminal_downloader.cancel_all_downloads()
+
+    def pause_download(self, software_id: str) -> bool:
+        pause_evt = self._pause_events.get(software_id)
+        if not pause_evt:
+            return False
+        pause_evt.set()
+        return True
+
+    def resume_download(self, software_id: str) -> bool:
+        pause_evt = self._pause_events.get(software_id)
+        if not pause_evt:
+            return False
+        pause_evt.clear()
+        return True
 
     def get_local_count(self) -> int:
         return self.local_detector.get_installer_count()
