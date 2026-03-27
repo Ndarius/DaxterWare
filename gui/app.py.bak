@@ -8,7 +8,6 @@ import tkinter as tk
 from tkinter import messagebox, filedialog, simpledialog
 import threading
 import logging
-import sys
 import webbrowser
 from pathlib import Path
 from typing import Optional, Dict, List, Callable
@@ -24,46 +23,27 @@ logger = logging.getLogger(__name__)
 # ──────────────────────────── Couleurs & Style ────────────────────────────
 class Theme:
     """Palette de couleurs pour l'application"""
-    current_mode = "blue"
-
-    # Blue Theme vs Black theme represented as (Light_Mode_color, Dark_Mode_color)
-    # This allows CustomTkinter to seamlessly switch the theme without a restart!
-    # "Light" -> Blue Theme, "Dark" -> Black Theme.
-    
-    BG_DARK = ("#1a1a2e", "#080808")
-    BG_CARD = ("#16213e", "#121212")
-    BG_SIDEBAR = ("#0f3460", "#181818")
-    ACCENT = ("#e94560", "#e94560")
-    ACCENT_HOVER = ("#ff6b81", "#ff6b81")
-    TEXT = ("#eaeaea", "#eaeaea")
-    TEXT_DIM = ("#a0a0b0", "#a0a0b0")
-    TEXT_DARK = ("#6c6c80", "#6c6c80")
-    SUCCESS = ("#2ed573", "#2ed573")
-    WARNING = ("#ffa502", "#ffa502")
-    ERROR = ("#ff4757", "#ff4757")
-    BORDER = ("#2a2a4a", "#252525")
-    INPUT_BG = ("#1e1e3a", "#1a1a1a")
-    PROGRESS_BG = ("#2a2a4a", "#252525")
-    BADGE_ONLINE = ("#1f4f91", "#1f4f91")
-    BADGE_OFFLINE = ("#2f6f46", "#2f6f46")
-    BADGE_LOCAL = ("#7a5b1a", "#7a5b1a")
-    
+    BG_DARK = "#1a1a2e"
+    BG_CARD = "#16213e"
+    BG_SIDEBAR = "#0f3460"
+    ACCENT = "#e94560"
+    ACCENT_HOVER = "#ff6b81"
+    TEXT = "#eaeaea"
+    TEXT_DIM = "#a0a0b0"
+    TEXT_DARK = "#6c6c80"
+    SUCCESS = "#2ed573"
+    WARNING = "#ffa502"
+    ERROR = "#ff4757"
+    BORDER = "#2a2a4a"
+    INPUT_BG = "#1e1e3a"
+    PROGRESS_BG = "#2a2a4a"
+    BADGE_ONLINE = "#1f4f91"
+    BADGE_OFFLINE = "#2f6f46"
+    BADGE_LOCAL = "#7a5b1a"
     CATEGORY_COLORS = [
         "#e94560", "#0f3460", "#2ed573", "#ffa502",
         "#5352ed", "#ff6348", "#1e90ff", "#a55eea"
     ]
-
-    @classmethod
-    def apply_mode(cls, mode_string):
-        cls.current_mode = mode_string
-        if mode_string == "black":
-            ctk.set_appearance_mode("dark")
-        else:
-            ctk.set_appearance_mode("light")
-
-    @classmethod
-    def toggle(cls):
-        pass # Now handled in _toggle_theme using apply_mode
 
 
 # ──────────────────────────── Widgets personnalisés ────────────────────────
@@ -156,6 +136,30 @@ class SoftwareCard(ctk.CTkFrame):
         )
         self.size_label.grid(row=0, column=2, rowspan=2, padx=6)
 
+        # Badge source (online/offline/local)
+        sw_type = str(self.software.get("type", "online")).lower()
+        source_text = "ONLINE"
+        source_color = Theme.BADGE_ONLINE
+        if sw_type == "offline":
+            source_text = "OFFLINE"
+            source_color = Theme.BADGE_OFFLINE
+        elif self.has_local_setup:
+            source_text = "LOCAL"
+            source_color = Theme.BADGE_LOCAL
+
+        self.source_badge = ctk.CTkLabel(
+            self,
+            text=source_text,
+            font=ctk.CTkFont(size=10, weight="bold"),
+            text_color=Theme.TEXT,
+            fg_color=source_color,
+            corner_radius=10,
+            padx=8,
+            pady=2,
+            width=72,
+        )
+        self.source_badge.grid(row=0, column=3, rowspan=2, padx=4)
+
         # Statut installé / local
         if self.is_installed:
             self.status_label = ctk.CTkLabel(
@@ -181,7 +185,7 @@ class SoftwareCard(ctk.CTkFrame):
                 text_color=Theme.TEXT_DARK,
                 width=100,
             )
-        self.status_label.grid(row=0, column=3, rowspan=2, padx=6)
+        self.status_label.grid(row=0, column=4, rowspan=2, padx=6)
 
         # Bouton info/site
         self.info_btn = ctk.CTkButton(
@@ -189,11 +193,11 @@ class SoftwareCard(ctk.CTkFrame):
             text="🌐",
             width=32,
             height=32,
-            fg_color=Theme.BG_SIDEBAR,
-            hover_color=Theme.ACCENT,
+            fg_color="transparent",
+            hover_color=Theme.BG_SIDEBAR,
             command=self._open_website,
         )
-        self.info_btn.grid(row=0, column=4, rowspan=2, padx=(2, 12))
+        self.info_btn.grid(row=0, column=5, rowspan=2, padx=(2, 12))
 
     def set_compact_mode(self, compact: bool):
         """Ajuste la densité de la carte en mode compact."""
@@ -205,6 +209,7 @@ class SoftwareCard(ctk.CTkFrame):
         if compact:
             self.size_label.configure(width=48)
             self.status_label.configure(width=86)
+            self.source_badge.configure(width=62)
             self.info_btn.configure(width=28, height=28)
 
             text = self.status_label.cget("text")
@@ -217,6 +222,7 @@ class SoftwareCard(ctk.CTkFrame):
         else:
             self.size_label.configure(width=60)
             self.status_label.configure(width=100)
+            self.source_badge.configure(width=72)
             self.info_btn.configure(width=32, height=32)
 
             text = self.status_label.cget("text")
@@ -333,10 +339,10 @@ class ProgressCard(ctk.CTkFrame):
 class SoftwareManagerApp(ctk.CTk):
     """Fenêtre principale de DaxterWare"""
 
-    WINDOW_MIN_WIDTH = 780
+    WINDOW_MIN_WIDTH = 920
     WINDOW_MIN_HEIGHT = 620
-    COMPACT_BREAKPOINT = 1080
-    TOOLBAR_COMPACT_BREAKPOINT = 1360
+    COMPACT_BREAKPOINT = 1240
+    TOOLBAR_COMPACT_BREAKPOINT = 1400
     EXTRA_COMPACT_BREAKPOINT = 1040
 
     def __init__(
@@ -368,20 +374,16 @@ class SoftwareManagerApp(ctk.CTk):
         self._software_cards: List[SoftwareCard] = []
         self._progress_cards: Dict[str, ProgressCard] = {}
         self._current_category: Optional[str] = None
-        self._active_tasks = 0
         self._is_processing = False
         self._current_download_id: Optional[str] = None
         self._download_paused = False
         self._responsive_mode: Optional[str] = None
         self._toolbar_responsive_mode: Optional[str] = None
         self._resize_after_id: Optional[str] = None
-        self._last_layout_width: Optional[int] = None
-        self._progress_reset_after_id: Optional[str] = None
 
         self._configure_window()
         self._build_ui()
         self._bind_responsive_events()
-        self._bind_software_scroll_events()
         self._refresh_license_ui()
         self.after(50, lambda: self._apply_responsive_layout(force=True))
         self._show_category(None)  # Afficher tous les logiciels
@@ -393,8 +395,7 @@ class SoftwareManagerApp(ctk.CTk):
         self.minsize(self.WINDOW_MIN_WIDTH, self.WINDOW_MIN_HEIGHT)
 
         # Thème
-        saved_theme = self.settings.get("theme_palette", "blue")
-        Theme.apply_mode(saved_theme)
+        ctk.set_appearance_mode("dark")
         ctk.set_default_color_theme("blue")
 
         self.configure(fg_color=Theme.BG_DARK)
@@ -418,13 +419,6 @@ class SoftwareManagerApp(ctk.CTk):
         self._build_sidebar()
         self._build_main_area()
 
-    def _toggle_theme(self):
-        current = self.settings.get("theme_palette", "blue")
-        new_theme = "black" if current == "blue" else "blue"
-        self.settings.set("theme_palette", new_theme)
-        self.settings.save()
-        Theme.apply_mode(new_theme)
-
     def _bind_responsive_events(self):
         """Active l'adaptation responsive en fonction de la largeur de fenêtre."""
         self.bind("<Configure>", self._on_window_resize)
@@ -441,85 +435,6 @@ class SoftwareManagerApp(ctk.CTk):
 
         self._resize_after_id = self.after(90, self._apply_responsive_layout)
 
-    def _bind_software_scroll_events(self):
-        """Fiabilise le scroll molette de la liste logiciels sans interférer avec les autres scrolls."""
-        self.bind_all("<MouseWheel>", self._on_any_mousewheel, add="+")
-        self.bind_all("<Button-4>", self._on_any_mousewheel, add="+")
-        self.bind_all("<Button-5>", self._on_any_mousewheel, add="+")
-
-    def _bind_scroll_frame_wheel(self, frame, callback):
-        canvas = getattr(frame, "_parent_canvas", None)
-        if canvas is None:
-            return
-        canvas.bind("<MouseWheel>", callback, add="+")
-        canvas.bind("<Button-4>", callback, add="+")
-        canvas.bind("<Button-5>", callback, add="+")
-
-    def _scroll_frame_by_wheel(self, frame, delta: int):
-        canvas = getattr(frame, "_parent_canvas", None)
-        if canvas is None:
-            return
-        if sys.platform.startswith("win"):
-            steps = -int(delta / 6)
-        else:
-            steps = -int(delta)
-
-        if steps == 0:
-            steps = -1 if delta > 0 else 1
-
-        canvas.yview_scroll(steps, "units")
-
-    @staticmethod
-    def _normalize_wheel_delta(event) -> int:
-        delta = getattr(event, "delta", 0)
-        if delta == 0:
-            num = getattr(event, "num", None)
-            if num == 4:
-                delta = 120
-            elif num == 5:
-                delta = -120
-        return delta
-
-    @staticmethod
-    def _is_widget_in_scroll_area(widget, frame) -> bool:
-        """Détermine si le widget survolé appartient à la zone du scrollable frame."""
-        candidates = {frame}
-        for attr_name in ("_parent_canvas", "_parent_frame", "_scrollbar"):
-            candidate = getattr(frame, attr_name, None)
-            if candidate is not None:
-                candidates.add(candidate)
-
-        current = widget
-        while current is not None:
-            if current in candidates:
-                return True
-            current = getattr(current, "master", None)
-
-        return False
-
-    def _on_any_mousewheel(self, event):
-        delta = self._normalize_wheel_delta(event)
-        if delta == 0:
-            return
-
-        hovered = self.winfo_containing(event.x_root, event.y_root)
-
-        if hovered is not None and self._is_widget_in_scroll_area(hovered, self.software_scroll):
-            self._scroll_frame_by_wheel(self.software_scroll, delta)
-            return "break"
-
-        if hovered is not None and self._is_widget_in_scroll_area(hovered, self.progress_scroll):
-            self._scroll_frame_by_wheel(self.progress_scroll, delta)
-            return "break"
-
-        if hovered is not None and self._is_widget_in_scroll_area(hovered, self.category_scroll):
-            self._scroll_frame_by_wheel(self.category_scroll, delta)
-            return "break"
-
-        # Fallback: prioriser la liste des logiciels
-        self._scroll_frame_by_wheel(self.software_scroll, delta)
-        return "break"
-
     def _apply_responsive_layout(self, force: bool = False):
         """Ajuste l'interface pour les écrans étroits/larges."""
         width = self.winfo_width()
@@ -530,40 +445,32 @@ class SoftwareManagerApp(ctk.CTk):
             not force
             and mode == self._responsive_mode
             and toolbar_mode == self._toolbar_responsive_mode
-            and self._last_layout_width is not None
-            and abs(width - self._last_layout_width) < 12
         ):
             return
 
         self._responsive_mode = mode
         self._toolbar_responsive_mode = toolbar_mode
-        self._last_layout_width = width
-
-        scale = max(0.52, min(1.0, width / 1440.0))
-        side_pad = max(8, int(12 * scale))
-        split_pad = max(4, int(6 * scale))
-        block_pad = max(6, int(12 * scale))
-
-        # Disposition stable : progression toujours visible à droite
-        self.software_scroll.grid_configure(row=1, column=0, padx=(side_pad, split_pad), pady=block_pad, sticky="nsew", columnspan=1)
-        self.progress_panel.grid_configure(row=1, column=1, padx=(split_pad, side_pad), pady=block_pad, sticky="nsew", columnspan=1)
-        self.toolbar_actions.grid_configure(row=0, column=1, columnspan=1, sticky="ew", padx=side_pad, pady=(block_pad, 0))
-
-        self.content_frame.grid_rowconfigure(0, weight=0)
-        self.content_frame.grid_rowconfigure(1, weight=1)
-        self.content_frame.grid_rowconfigure(2, weight=0)
-        self.content_frame.grid_rowconfigure(3, weight=0)
 
         if mode == "compact":
-            self.sidebar.configure(width=240)
+            self.sidebar.configure(width=210)
 
             if hasattr(self, "license_label"):
-                self.license_label.configure(wraplength=198)
+                self.license_label.configure(wraplength=166)
             if hasattr(self, "license_period_label"):
-                self.license_period_label.configure(wraplength=198)
+                self.license_period_label.configure(wraplength=166)
 
-            self.content_frame.grid_columnconfigure(0, weight=4)
-            self.content_frame.grid_columnconfigure(1, weight=2)
+            self.software_scroll.grid_configure(row=0, column=0, padx=(10, 10), pady=(10, 6), sticky="nsew")
+            self.progress_panel.grid_configure(row=1, column=0, padx=(10, 10), pady=(6, 10), sticky="nsew")
+
+            self.content_frame.grid_columnconfigure(0, weight=1)
+            self.content_frame.grid_columnconfigure(1, weight=0)
+            self.content_frame.grid_rowconfigure(0, weight=3)
+            self.content_frame.grid_rowconfigure(1, weight=2)
+
+            self.category_title.configure(font=ctk.CTkFont(size=16, weight="bold"))
+            self.select_all_btn.configure(text="☑ Tout", width=90)
+            self.install_btn.configure(text="⬇️ Installer", width=140)
+            self.pause_btn.configure(text="⏸️ Pause", width=100)
         else:
             self.sidebar.configure(width=240)
 
@@ -571,95 +478,55 @@ class SoftwareManagerApp(ctk.CTk):
                 self.license_label.configure(wraplength=198)
             if hasattr(self, "license_period_label"):
                 self.license_period_label.configure(wraplength=198)
+
+            self.software_scroll.grid_configure(row=0, column=0, padx=(12, 6), pady=12, sticky="nsew")
+            self.progress_panel.grid_configure(row=0, column=1, padx=(6, 12), pady=12, sticky="nsew")
 
             self.content_frame.grid_columnconfigure(0, weight=3)
             self.content_frame.grid_columnconfigure(1, weight=1)
+            self.content_frame.grid_rowconfigure(0, weight=1)
+            self.content_frame.grid_rowconfigure(1, weight=0)
 
-        inner_width = max(460, width - self.sidebar.cget("width"))
-        pause_visible = self._is_processing
+            self.category_title.configure(font=ctk.CTkFont(size=18, weight="bold"))
+            self.select_all_btn.configure(text="☑ Tout sélectionner", width=130)
+            self.install_btn.configure(text="⬇️  Installer la sélection", width=200)
+            self.pause_btn.configure(text="⏸️  Pause DL", width=130)
 
-        # Quand pause est visible, on pousse la colonne de droite pour garder
-        # les 3 boutons sur UNE seule ligne sans retour.
-        progress_ratio = 0.40 if pause_visible else 0.30
-        progress_min = 300 if pause_visible else 170
-        progress_max = 460 if pause_visible else 340
-        progress_width = max(progress_min, min(progress_max, int(inner_width * progress_ratio)))
-        left_width = max(240, inner_width - progress_width - (side_pad * 2 + split_pad * 2))
-
-        self.content_frame.grid_columnconfigure(0, minsize=left_width)
-        self.content_frame.grid_columnconfigure(1, minsize=progress_width)
-
-        self.category_title.configure(font=ctk.CTkFont(size=max(14, int(18 * scale)), weight="bold"))
-        self.count_label.configure(font=ctk.CTkFont(size=max(10, int(12 * scale))))
-
-        # Toolbar responsive : adapter texte/largeur sans casser la grille
-        toolbar_scale = max(0.62, min(1.0, width / 1440.0))
-        toolbar_available = max(240, progress_width - (side_pad * 2))
-        pause_text = "▶️ Reprendre DL" if self._download_paused else "⏸️  Pause DL"
-        self._set_pause_button_visibility(pause_visible)
-
-        if pause_visible:
-            # 3 boutons sur la même ligne: répartitions proportionnelles
-            small_w = max(80, int(toolbar_available * 0.24))
-            install_w = max(176, int(toolbar_available * 0.44))
-            pause_w = max(120, int(toolbar_available * 0.28))
-        else:
-            small_w = max(84, int(toolbar_available * 0.34))
-            install_w = max(128, int(toolbar_available * 0.62))
-            pause_w = max(88, int(toolbar_available * 0.24))
-
-        small_h = max(26, int(32 * toolbar_scale))
-        main_h = max(28, int(36 * toolbar_scale))
-
+        # Toolbar responsive : éviter l'écrasement des boutons
         if toolbar_mode == "compact":
-            self.select_all_btn.configure(width=max(74, int(small_w * 0.9)), height=small_h, text="☑ Tout")
-            self.install_btn.configure(width=max(152, int(install_w * 0.9)), height=main_h, text="⬇️ Installer")
-            self.select_all_btn.grid_configure(row=0, column=0, sticky="e")
-            self.install_btn.grid_configure(row=0, column=1, sticky="ew")
+            self.toolbar_actions.grid_configure(row=1, column=0, columnspan=4, sticky="ew", padx=12, pady=(0, 8))
+            self.category_title.grid_configure(row=0, column=0, padx=14, pady=(10, 2), sticky="w")
+            self.count_label.grid_configure(row=0, column=1, padx=(0, 8), pady=(10, 2), sticky="w")
 
-            if pause_visible:
-                self.pause_btn.configure(width=max(108, int(pause_w * 0.9)), height=main_h, text="▶️ Reprendre")
-                self.pause_btn.grid_configure(row=0, column=2, columnspan=1, sticky="e", padx=(0, 0), pady=0)
+            self.select_all_btn.configure(width=96, text="☑ Tout")
+            self.install_btn.configure(width=160, text="⬇️ Installer")
+            self.pause_btn.configure(width=108, text="⏸️ Pause")
         else:
-            self.select_all_btn.configure(width=small_w, height=small_h, text="☑ Tout sélectionner")
-            self.install_btn.configure(width=max(176, install_w), height=main_h, text="⬇️  Installer la sélection")
-            self.select_all_btn.grid_configure(row=0, column=0, sticky="e")
-            self.install_btn.grid_configure(row=0, column=1, sticky="ew")
+            self.toolbar_actions.grid_configure(row=0, column=3, columnspan=1, sticky="e", padx=12, pady=0)
+            self.category_title.grid_configure(row=0, column=0, padx=20, pady=14, sticky="w")
+            self.count_label.grid_configure(row=0, column=1, padx=6, pady=0, sticky="w")
 
-            if pause_visible:
-                self.pause_btn.configure(width=max(120, pause_w), height=main_h, text=pause_text)
-                self.pause_btn.grid_configure(row=0, column=2, columnspan=1, sticky="e", padx=(0, 0), pady=0)
+            self.select_all_btn.configure(width=130, text="☑ Tout sélectionner")
+            self.install_btn.configure(width=200, text="⬇️  Installer la sélection")
+            self.pause_btn.configure(width=130, text="⏸️  Pause DL")
 
         # Adapter la densité d'affichage des descriptions selon largeur
         self._refresh_cards_layout(mode, width)
 
     def _refresh_cards_layout(self, mode: str, width: int):
         """Ajuste les cartes en mode compact / large."""
-        scale = max(0.64, min(1.0, width / 1440.0))
-        left_col_width = self.software_scroll.winfo_width() or int(width * 0.55)
-        wrap = max(170, min(620, int(left_col_width * 0.60)))
+        if width < self.EXTRA_COMPACT_BREAKPOINT:
+            wrap = 260
+        elif mode == "compact":
+            wrap = 360
+        else:
+            wrap = 560
 
         is_extra_compact = width < self.EXTRA_COMPACT_BREAKPOINT
-        title_size = max(11, int((13 if is_extra_compact else 14) * scale))
-        desc_size = max(9, int((10 if is_extra_compact else 11) * scale))
-        size_width = max(42, int(60 * scale))
-        status_width = max(74, int(100 * scale))
-        info_wh = max(24, int(32 * scale))
-        checkbox_wh = max(14, int(20 * scale))
 
         for card in self._software_cards:
             try:
                 card.desc_label.configure(wraplength=wrap)
-                card.name_label.configure(font=ctk.CTkFont(size=title_size, weight="bold"))
-                card.desc_label.configure(font=ctk.CTkFont(size=desc_size))
-                card.size_label.configure(width=size_width)
-                card.status_label.configure(width=status_width)
-                card.info_btn.configure(width=info_wh, height=info_wh)
-                card.checkbox.configure(
-                    width=max(16, int(24 * scale)),
-                    checkbox_width=checkbox_wh,
-                    checkbox_height=checkbox_wh,
-                )
                 card.set_compact_mode(is_extra_compact)
             except Exception:
                 continue
@@ -702,20 +569,6 @@ class SoftwareManagerApp(ctk.CTk):
             text_color=Theme.TEXT_DARK,
         ).grid(row=1, column=0, sticky="w", padx=20, pady=(0, 20))
 
-        self.theme_btn = ctk.CTkButton(
-            self.sidebar,
-            text="🎨 Thème",
-            font=ctk.CTkFont(size=11),
-            fg_color="transparent",
-            border_width=1,
-            border_color=Theme.BORDER,
-            text_color=Theme.TEXT_DIM,
-            height=24,
-            width=70,
-            command=self._toggle_theme,
-        )
-        self.theme_btn.grid(row=1, column=0, sticky="e", padx=16, pady=(0, 20))
-
         # Barre de recherche
         self.search_var = ctk.StringVar()
         self.search_var.trace_add("write", self._on_search_changed)
@@ -744,6 +597,7 @@ class SoftwareManagerApp(ctk.CTk):
             scrollbar_button_hover_color=Theme.ACCENT,
         )
         self.category_scroll.grid(row=4, column=0, sticky="nsew", padx=10, pady=(0, 8))
+        self.category_scroll.grid_columnconfigure(0, weight=1)
 
         # Bouton "Tous les logiciels"
         self.all_btn = ctk.CTkButton(
@@ -756,7 +610,7 @@ class SoftwareManagerApp(ctk.CTk):
             anchor="w",
             command=lambda: self._show_category(None),
         )
-        self.all_btn.pack(fill="x", padx=6, pady=(2, 4))
+        self.all_btn.grid(row=0, column=0, sticky="ew", padx=6, pady=(2, 4))
 
         # Boutons de catégories
         self._category_buttons: Dict[str, ctk.CTkButton] = {}
@@ -776,7 +630,7 @@ class SoftwareManagerApp(ctk.CTk):
                 anchor="w",
                 command=lambda n=cat_name: self._show_category(n),
             )
-            btn.pack(fill="x", padx=6, pady=2)
+            btn.grid(row=1 + i, column=0, sticky="ew", padx=6, pady=2)
             self._category_buttons[cat_name] = btn
 
         # ─── Zone basse de la sidebar ───
@@ -962,43 +816,42 @@ class SoftwareManagerApp(ctk.CTk):
         main_frame = ctk.CTkFrame(self, fg_color="transparent")
         main_frame.grid(row=0, column=1, sticky="nsew", padx=0, pady=0)
         main_frame.grid_columnconfigure(0, weight=1)
-        main_frame.grid_rowconfigure(0, weight=1)
+        main_frame.grid_rowconfigure(1, weight=1)
 
-        self.content_frame = ctk.CTkFrame(main_frame, fg_color="transparent")
-        self.content_frame.grid(row=0, column=0, sticky="nsew")
-        self.content_frame.grid_columnconfigure(0, weight=3)  # Left column
-        self.content_frame.grid_columnconfigure(1, weight=1)  # Right column
-        self.content_frame.grid_rowconfigure(0, weight=0) # Headers
-        self.content_frame.grid_rowconfigure(1, weight=1) # Content
-        self.content_frame.grid_rowconfigure(2, weight=0) 
-        self.content_frame.grid_rowconfigure(3, weight=0)
+        # ─── Barre d'outils en haut ───
+        toolbar = ctk.CTkFrame(
+            main_frame,
+            fg_color=Theme.BG_CARD,
+            height=56,
+            corner_radius=0,
+        )
+        toolbar.grid(row=0, column=0, sticky="ew")
+        toolbar.grid_propagate(False)
+        toolbar.grid_rowconfigure(1, weight=0)
+        toolbar.grid_columnconfigure(0, weight=1)
+        toolbar.grid_columnconfigure(2, weight=1)
 
-        # --- LEFT SIDE HEADER ---
-        left_header = ctk.CTkFrame(self.content_frame, fg_color="transparent")
-        left_header.grid(row=0, column=0, sticky="ew", padx=12, pady=(12, 0))
-        
+        # Titre de la catégorie
         self.category_title = ctk.CTkLabel(
-            left_header,
+            toolbar,
             text="Tous les logiciels",
             font=ctk.CTkFont(size=18, weight="bold"),
             text_color=Theme.TEXT,
         )
-        self.category_title.pack(side="left", padx=(8, 12))
+        self.category_title.grid(row=0, column=0, padx=20, pady=14)
 
+        # Compteur
         self.count_label = ctk.CTkLabel(
-            left_header,
+            toolbar,
             text="",
             font=ctk.CTkFont(size=12),
             text_color=Theme.TEXT_DIM,
         )
-        self.count_label.pack(side="left")
+        self.count_label.grid(row=0, column=1, padx=6)
 
-        # --- RIGHT SIDE HEADER (Buttons) ---
-        self.toolbar_actions = ctk.CTkFrame(self.content_frame, fg_color="transparent")
-        self.toolbar_actions.grid(row=0, column=1, sticky="ew", padx=12, pady=(12, 0))
-        self.toolbar_actions.grid_columnconfigure(0, weight=0)
-        self.toolbar_actions.grid_columnconfigure(1, weight=1)
-        self.toolbar_actions.grid_columnconfigure(2, weight=0)
+        # Boutons d'action à droite
+        self.toolbar_actions = ctk.CTkFrame(toolbar, fg_color="transparent")
+        self.toolbar_actions.grid(row=0, column=3, padx=12)
 
         self.select_all_btn = ctk.CTkButton(
             self.toolbar_actions,
@@ -1011,7 +864,7 @@ class SoftwareManagerApp(ctk.CTk):
             height=32,
             command=self._toggle_select_all,
         )
-        self.select_all_btn.grid(row=0, column=0, padx=(0, 6), pady=0, sticky="e")
+        self.select_all_btn.pack(side="left", padx=4)
 
         self.install_btn = ctk.CTkButton(
             self.toolbar_actions,
@@ -1023,7 +876,7 @@ class SoftwareManagerApp(ctk.CTk):
             height=36,
             command=self._start_install_selected,
         )
-        self.install_btn.grid(row=0, column=1, padx=(0, 6), pady=0, sticky="ew")
+        self.install_btn.pack(side="left", padx=4)
 
         self.pause_btn = ctk.CTkButton(
             self.toolbar_actions,
@@ -1036,19 +889,26 @@ class SoftwareManagerApp(ctk.CTk):
             state="disabled",
             command=self._toggle_download_pause,
         )
-        self.pause_btn.grid(row=0, column=2, padx=(0, 0), pady=0, sticky="e")
-        self.pause_btn.grid_remove()
+        self.pause_btn.pack(side="left", padx=4)
 
-        # --- LEFT SIDE CONTENT (List) ---
+        # ─── Zone scrollable pour les logiciels ───
+        self.content_frame = ctk.CTkFrame(main_frame, fg_color="transparent")
+        self.content_frame.grid(row=1, column=0, sticky="nsew")
+        self.content_frame.grid_columnconfigure(0, weight=3)  # Liste logiciels
+        self.content_frame.grid_columnconfigure(1, weight=1)  # Panel progression
+        self.content_frame.grid_rowconfigure(0, weight=1)
+
+        # Liste des logiciels (scrollable)
         self.software_scroll = ctk.CTkScrollableFrame(
             self.content_frame,
             fg_color="transparent",
             scrollbar_button_color=Theme.BG_SIDEBAR,
             scrollbar_button_hover_color=Theme.ACCENT,
         )
-        self.software_scroll.grid(row=1, column=0, sticky="nsew", padx=(12, 6), pady=(8, 12))
+        self.software_scroll.grid(row=0, column=0, sticky="nsew", padx=(12, 6), pady=12)
+        self.software_scroll.grid_columnconfigure(0, weight=1)
 
-        # --- RIGHT SIDE CONTENT (Progression) ---
+        # Panel de progression (côté droit)
         self._build_progress_panel()
 
     def _build_progress_panel(self):
@@ -1060,7 +920,7 @@ class SoftwareManagerApp(ctk.CTk):
             border_width=1,
             border_color=Theme.BORDER,
         )
-        self.progress_panel.grid(row=1, column=1, sticky="nsew", padx=(6, 12), pady=(8, 12))
+        self.progress_panel.grid(row=0, column=1, sticky="nsew", padx=(6, 12), pady=12)
         self.progress_panel.grid_columnconfigure(0, weight=1)
 
         ctk.CTkLabel(
@@ -1172,8 +1032,7 @@ class SoftwareManagerApp(ctk.CTk):
                 is_installed=is_installed,
                 has_local_setup=has_local,
             )
-            card.pack(fill="x", pady=3, padx=2)
-            self._bind_widget_to_software_scroll(card)
+            card.grid(row=i, column=0, sticky="ew", pady=3)
             self._software_cards.append(card)
 
         # Réappliquer le responsive sur les cartes nouvellement rendues
@@ -1216,6 +1075,13 @@ class SoftwareManagerApp(ctk.CTk):
             )
             return
 
+        if self._is_processing:
+            messagebox.showwarning(
+                "En cours",
+                "Un traitement est déjà en cours. Veuillez patienter."
+            )
+            return
+
         selected = self._get_selected_software()
 
         if not selected:
@@ -1246,25 +1112,14 @@ class SoftwareManagerApp(ctk.CTk):
         if not confirm:
             return
 
-        self._active_tasks += 1
         self._is_processing = True
         self._download_paused = False
         self._current_download_id = None
-
-        if self._progress_reset_after_id:
-            try:
-                self.after_cancel(self._progress_reset_after_id)
-            except Exception:
-                pass
-            self._progress_reset_after_id = None
-
-        # self.install_btn.configure(state="disabled", text="⏳  Installation en cours...")
+        self.install_btn.configure(state="disabled", text="⏳  Installation en cours...")
         self.pause_btn.configure(state="normal", text="⏸️  Pause DL")
-        self._set_pause_button_visibility(True)
 
-        # Réinitialiser l'ancien état pour éviter les erreurs persistantes
+        # Préparer le panel de progression
         self._clear_progress_panel()
-        self.progress_placeholder.pack_forget()
 
         for sw in selected:
             name = sw.get("name", "Inconnu")
@@ -1412,22 +1267,18 @@ class SoftwareManagerApp(ctk.CTk):
     def _finalize_processing(self, total: int, success: int, fail: int):
         """Finalise le traitement (thread-safe)"""
         def _update():
-            self._active_tasks -= 1
-            if self._active_tasks <= 0:
-                self._active_tasks = 0
-                self._is_processing = False
-                self.install_btn.configure(
-                    state="normal",
-                    text="⬇️  Installer la sélection"
-                )
-                self.pause_btn.configure(
-                    state="disabled",
-                    text="⏸️  Pause DL"
-                )
-                self._set_pause_button_visibility(False)
+            self._is_processing = False
+            self.install_btn.configure(
+                state="normal",
+                text="⬇️  Installer la sélection"
+            )
+            self.pause_btn.configure(
+                state="disabled",
+                text="⏸️  Pause DL"
+            )
 
             self.stats_label.configure(
-                text=f"Terminé (dernière tâche): {success} ✓  {fail} ✗  sur {total}"
+                text=f"Terminé: {success} ✓  {fail} ✗  sur {total}"
             )
 
             # Notification
@@ -1446,23 +1297,7 @@ class SoftwareManagerApp(ctk.CTk):
             for card in self._software_cards:
                 card.is_checked = False
 
-            # Nettoyage visuel différé: n'affiche pas les erreurs indéfiniment
-            if self._progress_reset_after_id:
-                try:
-                    self.after_cancel(self._progress_reset_after_id)
-                except Exception:
-                    pass
-            self._progress_reset_after_id = self.after(30000, self._reset_progress_panel_if_idle)
-
         self.after(0, _update)
-
-    def _reset_progress_panel_if_idle(self):
-        """Efface la progression si aucune tâche n'est active."""
-        self._progress_reset_after_id = None
-        if self._is_processing:
-            return
-        self._clear_progress_panel()
-        self.progress_placeholder.pack(pady=40)
 
     def _toggle_download_pause(self):
         """Met en pause / reprend le téléchargement actif"""
@@ -1507,16 +1342,3 @@ class SoftwareManagerApp(ctk.CTk):
             card.destroy()
         self._progress_cards.clear()
         self.stats_label.configure(text="")
-
-    def _bind_widget_to_software_scroll(self, widget):
-        """Force le scroll molette des cartes logiciel vers le panneau principal."""
-        # Le routage molette est désormais global et basé sur le widget survolé.
-        # On conserve cette méthode pour compatibilité d'appel.
-        return
-
-    def _set_pause_button_visibility(self, visible: bool):
-        """Affiche le bouton pause uniquement pendant un traitement actif."""
-        if visible:
-            self.pause_btn.grid()
-        else:
-            self.pause_btn.grid_remove()
