@@ -638,7 +638,17 @@ class SoftwareManagerApp(ctk.CTk):
             card = SoftwareCard(self.software_scroll, software=sw, is_installed=self.installer_manager.check_software_installed(sw), has_local_setup=self.download_manager.local_detector.find_installer(sw) is not None)
             card.pack(fill="x", pady=3, padx=2)
             self._software_cards.append(card)
+            # Liaison récursive pour le scroll
+            self._bind_scroll_recursive(card)
         self._apply_responsive_layout(force=True)
+
+    def _bind_scroll_recursive(self, widget):
+        """Liaison récursive pour forcer le scroll sur tous les éléments enfants"""
+        widget.bind("<MouseWheel>", lambda e: self._on_any_mousewheel(e), add="+")
+        widget.bind("<Button-4>", lambda e: self._on_any_mousewheel(e), add="+")
+        widget.bind("<Button-5>", lambda e: self._on_any_mousewheel(e), add="+")
+        for child in widget.winfo_children():
+            self._bind_scroll_recursive(child)
 
     def _on_search_changed(self, *args): self._load_software_list(self._current_category)
     def _toggle_select_all(self):
