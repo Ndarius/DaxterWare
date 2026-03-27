@@ -88,12 +88,20 @@
                     "description": "Service de streaming musical",
                     "version": "latest",
                     "type": "online",
-                    "url": "https://download.scdn.co/SpotifySetup.exe",
+                    "url": "https://download.scdn.co/SpotifyFullSetup.exe",
                     "installer_type": "exe",
-                    "silent_args": "/silent",
+                    "silent_args": "/SILENT",
+                    "requires_admin": false,
                     "sha256": "",
                     "size_mb": 1,
                     "detect_registry": "HKCU\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\Spotify",
+                    "detect_registry_any": [
+                        "HKCU\\SOFTWARE\\Spotify"
+                    ],
+                    "detect_paths_any": [
+                        "%APPDATA%\\Spotify\\Spotify.exe",
+                        "%LOCALAPPDATA%\\Microsoft\\WindowsApps\\Spotify.exe"
+                    ],
                     "website": "https://www.spotify.com/"
                 }
             ]

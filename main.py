@@ -69,6 +69,7 @@ def main():
     # ─── 2. Charger la configuration ───
     from core.catalog_manager import CatalogManager, SettingsManager
     from core.license_manager import LicenseManager
+    from core.installer import InstallerManager
 
     # Config : d'abord à côté de l'exe, sinon embarquée (_MEIPASS)
     settings_path = BASE_PATH / "config" / "settings.json"
@@ -81,6 +82,15 @@ def main():
 
     settings = SettingsManager(settings_path)
     logger.info(f"Configuration chargée: {settings.app_name} v{settings.version}")
+
+    # Auto-élévation admin au démarrage (configurable)
+    auto_elevate_admin = bool(settings.get("auto_elevate_admin_on_startup", True))
+    if auto_elevate_admin and not InstallerManager.is_admin():
+        logger.warning(
+            "Exécution sans droits administrateur: élévation automatique demandée (UAC)."
+        )
+        InstallerManager.request_admin_elevation()
+        return
 
     license_file = BASE_PATH / "config" / "license.json"
     license_manager = LicenseManager(
@@ -108,13 +118,18 @@ def main():
             print("Exécutez: pip install -r requirements.txt\n")
             sys.exit(1)
 
-    # ─── 4. Créer les dossiers nécessaires ───
-    for folder_key in ["download_folder", "installers_folder", "offline_folder", "logs_folder"]:
-        folder = BASE_PATH / settings.get(folder_key, folder_key)
+    # 4. Créer les dossiers nécessaires
+    folders_to_create = [
+        settings.get("download_folder", "downloads"),
+        settings.get("installers_folder", "installers"),
+        settings.get("offline_folder", "offline"),
+        settings.get("logs_folder", "logs")
+    ]
+    for folder_name in folders_to_create:
+        folder = BASE_PATH / folder_name
         folder.mkdir(parents=True, exist_ok=True)
 
     # ─── 5. Vérifier les droits admin ───
-    from core.installer import InstallerManager
 
     if InstallerManager.is_admin():
         logger.info("Exécution avec droits administrateur")

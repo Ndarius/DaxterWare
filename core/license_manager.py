@@ -1,7 +1,7 @@
 """
 DaxterWare - Gestion des licences et périodes d'essai
 - Essai gratuit: 30 jours (automatique)
-- Essai Pro: 30 jours (activation via clé produit)
+- Pro: illimité (activation via clé produit)
 """
 
 from __future__ import annotations
@@ -46,9 +46,8 @@ class LicenseManager:
             "installation_date": install_date,
             "free_trial_start": install_date,
             "free_trial_days": self.FREE_TRIAL_DAYS,
-            "pro_trial_start": "",
-            "pro_trial_days": self.PRO_TRIAL_DAYS,
             "pro_key_activated": False,
+            "pro_activated_on": "",
             "pro_activation_count": 0,
         }
         self._save()
@@ -58,10 +57,15 @@ class LicenseManager:
         self._data.setdefault("installation_date", self._safe_iso_date(self.installation_date))
         self._data.setdefault("free_trial_start", self._data.get("installation_date", date.today().isoformat()))
         self._data.setdefault("free_trial_days", self.FREE_TRIAL_DAYS)
-        self._data.setdefault("pro_trial_start", "")
-        self._data.setdefault("pro_trial_days", self.PRO_TRIAL_DAYS)
-        self._data.setdefault("pro_key_activated", False)
+        # Compatibilité rétroactive: anciennes versions pouvaient stocker un indicateur différent
+        legacy_pro_activated = bool(self._data.get("pro_trial_activated", False))
+        self._data.setdefault("pro_key_activated", legacy_pro_activated)
+        self._data.setdefault("pro_activated_on", "")
         self._data.setdefault("pro_activation_count", 0)
+
+        # Si une activation Pro a déjà eu lieu historiquement, verrouiller en mode Pro illimité
+        if int(self._data.get("pro_activation_count", 0)) > 0:
+            self._data["pro_key_activated"] = True
 
         # Toujours ancrer l'essai gratuit au jour d'installation (pas au jour d'activation/licence)
         install_date = self._safe_iso_date(self._data.get("installation_date", self.installation_date))
@@ -101,17 +105,8 @@ class LicenseManager:
         free_left = self._days_left(free_start, free_total_days)
 
         pro_active = bool(self._data.get("pro_key_activated", False))
-        pro_left = -1
-        pro_total_days = int(self._data.get("pro_trial_days", self.PRO_TRIAL_DAYS))
-        pro_start = None
-        pro_end = None
-        if pro_active and self._data.get("pro_trial_start"):
-            pro_start = self._parse_iso(self._data["pro_trial_start"])
-            pro_end = pro_start + timedelta(days=pro_total_days)
-            pro_left = self._days_left(pro_start, pro_total_days)
-
-        if pro_active and pro_left > 0:
-            plan = "pro_trial"
+        if pro_active:
+            plan = "pro"
             can_use = True
         elif free_left > 0:
             plan = "free_trial"
@@ -127,11 +122,13 @@ class LicenseManager:
             "free_total_days": free_total_days,
             "free_trial_start": free_start.isoformat(),
             "free_trial_end": free_end.isoformat(),
-            "pro_days_left": max(pro_left, 0) if pro_left >= 0 else 0,
-            "pro_total_days": pro_total_days,
-            "pro_trial_start": pro_start.isoformat() if pro_start else "",
-            "pro_trial_end": pro_end.isoformat() if pro_end else "",
+            "pro_days_left": 0,
+            "pro_total_days": 0,
+            "pro_trial_start": "",
+            "pro_trial_end": "",
             "pro_key_activated": pro_active,
+            "pro_is_unlimited": pro_active,
+            "pro_activated_on": self._data.get("pro_activated_on", ""),
             "installation_date": self._data.get("installation_date", ""),
         }
 
@@ -139,20 +136,18 @@ class LicenseManager:
         return self.get_status()["can_use"]
 
     def activate_pro_trial(self, product_key: str) -> tuple[bool, str]:
-        """Active l'essai Pro 30 jours avec la clé ultime."""
+        """Active le mode Pro illimité avec la clé ultime."""
         entered = (product_key or "").strip()
         if entered != self.PRODUCT_KEY_ULTIMATE:
             return False, "Clé produit invalide."
 
-        status = self.get_status()
-        if status["plan"] == "pro_trial" and status["pro_days_left"] > 0:
-            return False, f"Essai Pro déjà actif ({status['pro_days_left']} jour(s) restant(s))."
+        if bool(self._data.get("pro_key_activated", False)):
+            return False, "Mode Pro déjà activé (illimité)."
 
         today = date.today().isoformat()
         self._data["pro_key_activated"] = True
-        self._data["pro_trial_start"] = today
-        self._data["pro_trial_days"] = self.PRO_TRIAL_DAYS
+        self._data["pro_activated_on"] = today
         self._data["pro_activation_count"] = int(self._data.get("pro_activation_count", 0)) + 1
         self._save()
 
-        return True, "Essai Pro activé pour 30 jours."
+        return True, "Mode Pro activé en illimité."

@@ -9,7 +9,6 @@ venv/
 # PyInstaller
 build/
 dist/
-*.spec
 
 # Downloads & logs
 downloads/

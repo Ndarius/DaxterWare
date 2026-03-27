@@ -98,6 +98,101 @@ class InstallerManager:
                 1
             )
             sys.exit(0)
+
+    @staticmethod
+    def _expand_env_path(path_value: str) -> str:
+        """Développe les variables d'environnement d'un chemin."""
+        return os.path.expandvars(path_value or "")
+
+    @staticmethod
+    def _iter_registry_targets(software: Dict) -> list:
+        """
+        Retourne toutes les clés registre de détection possibles.
+        Supporte:
+        - detect_registry: str
+        - detect_registry_any: list[str]
+        """
+        targets = []
+        primary = software.get("detect_registry", "")
+        if isinstance(primary, str) and primary.strip():
+            targets.append(primary.strip())
+
+        additional = software.get("detect_registry_any", [])
+        if isinstance(additional, list):
+            for item in additional:
+                if isinstance(item, str) and item.strip():
+                    targets.append(item.strip())
+
+        # Dédupliquer en conservant l'ordre
+        seen = set()
+        unique = []
+        for target in targets:
+            if target not in seen:
+                seen.add(target)
+                unique.append(target)
+        return unique
+
+    @staticmethod
+    def _iter_file_targets(software: Dict) -> list:
+        """
+        Retourne toutes les cibles fichier à vérifier.
+        Supporte:
+        - detect_path: str
+        - detect_paths_any: list[str]
+        """
+        targets = []
+        primary = software.get("detect_path", "")
+        if isinstance(primary, str) and primary.strip():
+            targets.append(primary.strip())
+
+        additional = software.get("detect_paths_any", [])
+        if isinstance(additional, list):
+            for item in additional:
+                if isinstance(item, str) and item.strip():
+                    targets.append(item.strip())
+
+        seen = set()
+        unique = []
+        for target in targets:
+            if target not in seen:
+                seen.add(target)
+                unique.append(target)
+        return unique
+
+    @staticmethod
+    def _registry_key_exists(detect_key: str) -> bool:
+        """Vérifie l'existence d'une clé de registre Windows."""
+        parts = detect_key.split("\\", 1)
+        if len(parts) != 2:
+            return False
+
+        hive_map = {
+            "HKLM": winreg.HKEY_LOCAL_MACHINE,
+            "HKCU": winreg.HKEY_CURRENT_USER,
+            "HKCR": winreg.HKEY_CLASSES_ROOT,
+        }
+
+        hive_name = parts[0]
+        key_path = parts[1]
+        hive = hive_map.get(hive_name)
+        if hive is None:
+            return False
+
+        access_modes = [
+            winreg.KEY_READ,
+            winreg.KEY_READ | winreg.KEY_WOW64_64KEY,
+            winreg.KEY_READ | winreg.KEY_WOW64_32KEY,
+        ]
+
+        for access_mode in access_modes:
+            try:
+                key = winreg.OpenKey(hive, key_path, 0, access_mode)
+                winreg.CloseKey(key)
+                return True
+            except OSError:
+                continue
+
+        return False
     
     def check_software_installed(self, software: Dict) -> bool:
         """
@@ -109,44 +204,21 @@ class InstallerManager:
         Returns:
             True si le logiciel est installé, False sinon
         """
-        detect_key = software.get("detect_registry", "")
-        if not detect_key:
-            return False
-        
-        # Parser la clé de registre
-        parts = detect_key.split("\\", 1)
-        if len(parts) != 2:
-            return False
-        
-        hive_map = {
-            "HKLM": winreg.HKEY_LOCAL_MACHINE,
-            "HKCU": winreg.HKEY_CURRENT_USER,
-            "HKCR": winreg.HKEY_CLASSES_ROOT,
-        }
-        
-        hive_name = parts[0]
-        key_path = parts[1]
-        
-        hive = hive_map.get(hive_name)
-        if hive is None:
-            return False
-        
-        try:
-            # Essayer d'ouvrir la clé
-            key = winreg.OpenKey(hive, key_path, 0, winreg.KEY_READ)
-            winreg.CloseKey(key)
-            return True
-        except WindowsError:
-            # Essayer également la vue 64 bits
-            try:
-                key = winreg.OpenKey(
-                    hive, key_path, 0, 
-                    winreg.KEY_READ | winreg.KEY_WOW64_64KEY
-                )
-                winreg.CloseKey(key)
+        # 1) Détection registre (une ou plusieurs clés)
+        for detect_key in self._iter_registry_targets(software):
+            if self._registry_key_exists(detect_key):
                 return True
-            except WindowsError:
-                return False
+
+        # 2) Détection par chemins fichiers (utile pour certains setup user-space)
+        for raw_path in self._iter_file_targets(software):
+            expanded = Path(self._expand_env_path(raw_path))
+            try:
+                if expanded.exists():
+                    return True
+            except OSError:
+                continue
+
+        return False
     
     def get_installed_version(self, software: Dict) -> Optional[str]:
         """
@@ -158,34 +230,39 @@ class InstallerManager:
         Returns:
             La version installée ou None
         """
-        detect_key = software.get("detect_registry", "")
-        if not detect_key:
-            return None
-        
-        parts = detect_key.split("\\", 1)
-        if len(parts) != 2:
-            return None
-        
         hive_map = {
             "HKLM": winreg.HKEY_LOCAL_MACHINE,
             "HKCU": winreg.HKEY_CURRENT_USER,
         }
-        
-        hive = hive_map.get(parts[0])
-        if hive is None:
-            return None
-        
-        try:
-            key = winreg.OpenKey(hive, parts[1], 0, winreg.KEY_READ)
-            try:
-                version, _ = winreg.QueryValueEx(key, "DisplayVersion")
-                return version
-            except WindowsError:
-                pass
-            finally:
-                winreg.CloseKey(key)
-        except WindowsError:
-            pass
+
+        for detect_key in self._iter_registry_targets(software):
+            parts = detect_key.split("\\", 1)
+            if len(parts) != 2:
+                continue
+
+            hive = hive_map.get(parts[0])
+            if hive is None:
+                continue
+
+            access_modes = [
+                winreg.KEY_READ,
+                winreg.KEY_READ | winreg.KEY_WOW64_64KEY,
+                winreg.KEY_READ | winreg.KEY_WOW64_32KEY,
+            ]
+
+            for access_mode in access_modes:
+                try:
+                    key = winreg.OpenKey(hive, parts[1], 0, access_mode)
+                    try:
+                        version, _ = winreg.QueryValueEx(key, "DisplayVersion")
+                        if version:
+                            return str(version)
+                    except OSError:
+                        pass
+                    finally:
+                        winreg.CloseKey(key)
+                except OSError:
+                    continue
         
         return None
     
@@ -292,8 +369,9 @@ class InstallerManager:
             if progress_callback:
                 progress_callback(msg)
         
-        # Vérifier les droits administrateur
-        if not self.is_admin():
+        # Vérifier les droits administrateur (optionnel selon le logiciel)
+        requires_admin = bool(software.get("requires_admin", True))
+        if requires_admin and not self.is_admin():
             return InstallResult(
                 software_id=software_id,
                 software_name=software_name,
@@ -353,15 +431,18 @@ class InstallerManager:
             
             duration = time.time() - start_time
             
-            # Codes de retour courants pour les MSI
-            success_codes = [0, 3010]  # 3010 = succès avec redémarrage requis
-            
-            if result.returncode in success_codes:
+            # Codes de retour courants de succès
+            success_codes = [0, 3010, 1641]  # 3010/1641 = succès avec redémarrage
+            installed_after = self.check_software_installed(software)
+
+            if result.returncode in success_codes or installed_after:
                 msg = f"{software_name} installé avec succès"
-                if result.returncode == 3010:
+                if result.returncode in (3010, 1641):
                     msg += " (redémarrage recommandé)"
+                elif result.returncode not in success_codes and installed_after:
+                    msg += f" (confirmé malgré code {result.returncode})"
                 log_progress(msg)
-                
+
                 return InstallResult(
                     software_id=software_id,
                     software_name=software_name,
@@ -370,18 +451,54 @@ class InstallerManager:
                     return_code=result.returncode,
                     duration=duration
                 )
-            else:
-                error_msg = result.stderr or f"Code de retour: {result.returncode}"
-                log_progress(f"Échec de l'installation de {software_name}: {error_msg}")
-                
-                return InstallResult(
-                    software_id=software_id,
-                    software_name=software_name,
-                    status=InstallStatus.FAILED,
-                    message=error_msg,
-                    return_code=result.returncode,
-                    duration=duration
-                )
+
+            # Fallback spécifique Spotify: certains installeurs acceptent des variantes d'arguments
+            if software_id.lower() == "spotify":
+                fallback_args = [
+                    "/SILENT",
+                    "/silent",
+                    "/S",
+                    "--silent",
+                ]
+                current_silent_args = (software.get("silent_args", "") or "").strip().lower()
+
+                for alt_args in fallback_args:
+                    if alt_args.strip().lower() == current_silent_args:
+                        continue
+
+                    retry_cmd = [str(installer_path)] + alt_args.split()
+                    logger.info(f"Retry Spotify avec arguments: {alt_args}")
+                    retry_result = subprocess.run(
+                        retry_cmd,
+                        capture_output=True,
+                        text=True,
+                        timeout=1800,
+                        creationflags=subprocess.CREATE_NO_WINDOW
+                    )
+
+                    if retry_result.returncode in success_codes or self.check_software_installed(software):
+                        msg = f"{software_name} installé avec succès (fallback args: {alt_args})"
+                        log_progress(msg)
+                        return InstallResult(
+                            software_id=software_id,
+                            software_name=software_name,
+                            status=InstallStatus.SUCCESS,
+                            message=msg,
+                            return_code=retry_result.returncode,
+                            duration=time.time() - start_time,
+                        )
+
+            error_msg = result.stderr or f"Code de retour: {result.returncode}"
+            log_progress(f"Échec de l'installation de {software_name}: {error_msg}")
+
+            return InstallResult(
+                software_id=software_id,
+                software_name=software_name,
+                status=InstallStatus.FAILED,
+                message=error_msg,
+                return_code=result.returncode,
+                duration=duration
+            )
                 
         except subprocess.TimeoutExpired:
             return InstallResult(

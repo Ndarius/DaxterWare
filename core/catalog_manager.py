@@ -75,23 +75,26 @@ class CatalogManager:
                 continue
 
             rel_path = file_path.relative_to(offline_root)
-            classification = rel_path.parts[0] if len(rel_path.parts) > 1 else "Général"
-
-            grouped.setdefault(classification, []).append(
+            
+            if len(rel_path.parts) > 1:
+                category_name = f"Offline - {rel_path.parts[0]}"
+            else:
+                category_name = "Offline"
+            
+            grouped.setdefault(category_name, []).append(
                 self._build_offline_software(file_path=file_path, rel_path=rel_path)
             )
 
         if not grouped:
             return
 
-        for classification in sorted(grouped.keys(), key=lambda x: x.lower()):
-            software_items = sorted(grouped[classification], key=lambda s: s.get("name", "").lower())
+        for cat_name in sorted(grouped.keys()):
+            software_items = sorted(grouped[cat_name], key=lambda s: s.get("name", "").lower())
             self._categories.append({
-                "name": f"Offline / {classification}",
-                "icon": "📁",
+                "name": cat_name,
+                "icon": "📦" if cat_name == "Offline" else "📁",
                 "software": software_items,
             })
-
         logger.info(
             "Offline chargé: %s classification(s), %s setup(s)",
             len(grouped),
